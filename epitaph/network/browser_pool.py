@@ -1,7 +1,10 @@
-# Менеджер браузерных контекстов с поддержкой режима без Playwright
+# Менеджер браузерных контекстов с безопасным импортом Playwright
+import logging
 from typing import Any, Optional
 from epitaph.models.proxy import ProxyEntity
 from epitaph.utils.user_agents import UserAgentManager
+
+logger = logging.getLogger("epitaph.network.browser_pool")
 
 try:
     from playwright.async_api import Browser, BrowserContext, async_playwright
@@ -11,6 +14,10 @@ except (ImportError, RuntimeError):
     Browser = Any  # type: ignore
     BrowserContext = Any  # type: ignore
     HAS_PLAYWRIGHT = False
+    logger.warning(
+        "Playwright недоступен в текущем окружении (Android Termux). "
+        "Браузерный режим отключен, сканирование выполняется в чистом HTTP-режиме."
+    )
 
 
 class PlaywrightBrowserPool:
@@ -25,7 +32,7 @@ class PlaywrightBrowserPool:
         # Запуск процесса Chromium с валидацией платформенной поддержки
         if not HAS_PLAYWRIGHT:
             raise RuntimeError(
-                "Playwright не поддерживается в среде Android Termux. Используйте HTTP-режим."
+                "Браузерный режим недоступен: Playwright не поддерживается в среде Android Termux."
             )
         if not self._browser:
             self._playwright = await async_playwright().start()
@@ -38,7 +45,7 @@ class PlaywrightBrowserPool:
         # Создание эфемерного контекста с проверкой доступности среды
         if not HAS_PLAYWRIGHT:
             raise RuntimeError(
-                "Playwright не поддерживается в среде Android Termux. Используйте HTTP-режим."
+                "Браузерный контекст не может быть создан: Playwright недоступен."
             )
         if not self._browser:
             await self.start()
