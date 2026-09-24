@@ -4,10 +4,10 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.events import Resize
 from textual.screen import Screen
-from textual.widgets import Input, Static
+from textual.widgets import Button, Input, Static
 
 from epitaph.ui.widgets.banner import HeaderBanner
-from epitaph.ui.widgets.menu_slot import ExitBadge, MenuSlot
+from epitaph.ui.widgets.menu_slot import MenuSlot
 
 
 class MainScreen(Screen[None]):
@@ -30,7 +30,10 @@ class MainScreen(Screen[None]):
                                 yield MenuSlot(slot_number=slot_idx)
 
             with Vertical(id="footer_panel"):
-                yield ExitBadge("[q] > выход", id="exit_badge")
+                with Horizontal(id="action_bar"):
+                    yield Button("> клавиатура", id="keyboard_button")
+                    yield Static(id="action_spacer")
+                    yield Button("[q] > выход", id="exit_button")
                 yield Static(
                     "[ ожидание ] Выберите номер слота или введите 'q' для выхода",
                     id="status_message",
@@ -60,6 +63,15 @@ class MainScreen(Screen[None]):
             banner.update_banner(width)
         except Exception:
             pass
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        # Обработка нажатий на функциональные кнопки нижней панели
+        if event.button.id == "keyboard_button":
+            command_input = self.query_one("#command_input", Input)
+            command_input.focus()
+            command_input.cursor_position = len(command_input.value)
+        elif event.button.id == "exit_button":
+            self.app.exit()
 
     @on(MenuSlot.Selected)
     def handle_slot_selected(self, message: MenuSlot.Selected) -> None:
