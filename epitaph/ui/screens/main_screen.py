@@ -1,68 +1,66 @@
-import asyncio
+# Точка входа в TUI-интерфейс Epitaph
+from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Header, Input
-from epitaph.core.engine import ScanEngine
-from epitaph.core.events import CheckResultEvent, LogEvent, ProgressUpdateEvent, ScanCompletedEvent
-from epitaph.models.target import TargetProfile
-from epitaph.ui.widgets.log_stream import LogStreamWidget
-from epitaph.ui.widgets.progress_bar import ScanProgressBar
-from epitaph.ui.widgets.result_table import ResultTableWidget
+from textual.widgets import Input, Static
+
+from epitaph.ui.widgets.banner import HeaderBanner
+from epitaph.ui.widgets.menu_slot import ExitBadge, MenuSlot
 
 
-class MainScreen(Screen):
+class MainScreen(Screen[None]):
+    # Экран главного меню с 30 слотами и командной строкой
+
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=True)
+        # Компоновка интерфейсных блоков главного экрана
         with Vertical(id="main_container"):
-            with Horizontal(id="input_bar"):
-                yield Input(placeholder="Введите целевой никнейм для сканирования...", id="target_input")
-                yield Button("Старт", id="start_button", variant="primary")
-            yield ScanProgressBar(id="progress_bar")
-            with Horizontal(id="content_panels"):
-                yield ResultTableWidget(id="result_table")
-                yield LogStreamWidget(id="log_stream")
-        yield Footer()
+            yield HeaderBanner(id="header_banner")
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "start_button":
-            self.action_start_scan()
+            menu_frame = Vertical(id="menu_frame")
+            menu_frame.border_title = "ДОСТУПНЫЕ МОДУЛИ"
+            with menu_frame:
+                with Horizontal(id="grid_container"):
+                    # Разбиение 30 слотов на три равные колонки по 10 элементов
+                    for col_idx in range(3):
+                        with Vertical(classes="menu_column"):
+                            start_slot = col_idx * 10 + 1
+                            for slot_idx in range(start_slot, start_slot + 10):
+                                yield MenuSlot(slot_number=slot_idx)
 
-    def action_start_scan(self) -> None:
-        target_input = self.query_one("#target_input", Input)
-        username = target_input.value.strip()
-        if not username:
-            log_widget = self.query_one("#log_stream", LogStreamWidget)
-            log_widget.write_line("Никнейм не указан.")
+            with Vertical(id="footer_panel"):
+                yield ExitBadge("[q] > выход", id="exit_badge")
+                yield Static(
+                    "[ ожидание ] Выберите номер слота или введите 'q' для выхода",
+                    id="status_message",
+                )
+                with Horizontal(id="command_bar"):
+                    yield Static("Select function number > ", id="prompt_label")
+                    yield Input(
+                        placeholder="введите номер (1-30) или 'q'...",
+                        id="command_input",
+                    )
+
+    @on(MenuSlot.Selected)
+    def handle_slot_selected(self, message: MenuSlot.Selected) -> None:
+        # Заглушка события интерактивного выбора слота
+        status = self.query_one("#status_message", Static)
+        status.update(f"[ заглушка ] Слот {message.slot_number} > SOON (модуль в разработке)")
+
+    @on(Input.Submitted, "#command_input")
+    def handle_command_submitted(self, event: Input.Submitted) -> None:
+        # Обработка команд в нижней терминальной строке
+        raw_val = event.value.strip().lower()
+        event.input.value = ""
+
+        if raw_val in ("q", "quit", "exit", "выход"):
+            self.app.exit()
             return
 
-        target = TargetProfile(username=username)
-        asyncio.create_task(self._execute_scan(target))
-
-    async def _execute_scan(self, target: TargetProfile) -> None:
-        engine = ScanEngine()
-        table_widget = self.query_one("#result_table", ResultTableWidget)
-        progress_widget = self.query_one("#progress_bar", ScanProgressBar)
-        log_widget = self.query_one("#log_stream", LogStreamWidget)
-
-        table_widget.clear_results()
-        log_widget.write_line(f"Поиск по цели: {target.username}")
-
-        scan_task = asyncio.create_task(engine.run_scan(target))
-
-        while not scan_task.done() or not engine.event_queue.empty():
-            try:
-                event = await asyncio.wait_for(engine.event_queue.get(), timeout=0.1)
-                if isinstance(event, CheckResultEvent):
-                    table_widget.add_result(event.result)
-                    log_widget.write_line(f"[{event.result.platform_name}] {event.result.status}")
-                elif isinstance(event, ProgressUpdateEvent):
-                    progress_widget.update_progress(event.completed, event.total)
-                elif isinstance(event, LogEvent):
-                    log_widget.write_line(f"[{event.level}] {event.message}")
-                elif isinstance(event, ScanCompletedEvent):
-                    log_widget.write_line("Сканирование завершено. Отчеты сформированы.")
-            except asyncio.TimeoutError:
-                continue
-
-        await scan_task
+        if raw_val.isdigit() and 1 <= int(raw_val) <= 30:
+            slot_num = int(raw_val)
+            status = self.query_one("#status_message", Static)
+            status.update(f"[ заглушка ] Выбран слот {slot_num} > SOON (модуль в разработке)")
+        else:
+            status = self.query_one("#status_message", Static)
+            status.update("[ ошибка ] Введите число от 1 до 30 или 'q' для выхода")
