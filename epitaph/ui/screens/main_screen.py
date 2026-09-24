@@ -1,7 +1,8 @@
-# Точка входа в TUI-интерфейс Epitaph
+# Экран главного меню TUI-интерфейса Epitaph с адаптивной версткой
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.events import Resize
 from textual.screen import Screen
 from textual.widgets import Input, Static
 
@@ -10,7 +11,7 @@ from epitaph.ui.widgets.menu_slot import ExitBadge, MenuSlot
 
 
 class MainScreen(Screen[None]):
-    # Экран главного меню с 30 слотами и командной строкой
+    # Экран главного меню с поддержкой адаптивной одно- и трехколоночной сетки
 
     def compose(self) -> ComposeResult:
         # Компоновка интерфейсных блоков главного экрана
@@ -21,7 +22,7 @@ class MainScreen(Screen[None]):
             menu_frame.border_title = "ДОСТУПНЫЕ МОДУЛИ"
             with menu_frame:
                 with Horizontal(id="grid_container"):
-                    # Разбиение 30 слотов на три равные колонки по 10 элементов
+                    # Разбиение 30 слотов на колонки с адаптивным поведением
                     for col_idx in range(3):
                         with Vertical(classes="menu_column"):
                             start_slot = col_idx * 10 + 1
@@ -40,6 +41,25 @@ class MainScreen(Screen[None]):
                         placeholder="введите номер (1-30) или 'q'...",
                         id="command_input",
                     )
+
+    def on_mount(self) -> None:
+        # Установка адаптивной геометрии при первоначальном монтировании экрана
+        self._apply_responsive_layout(self.size.width)
+
+    def on_resize(self, event: Resize) -> None:
+        # Реакция на изменение размеров терминала в рантайме
+        self._apply_responsive_layout(event.size.width)
+
+    def _apply_responsive_layout(self, width: int) -> None:
+        # Переключение между трехколоночным и одноколоночным представлением
+        is_compact = width < 80
+        try:
+            container = self.query_one("#main_container")
+            container.set_class(is_compact, "compact-layout")
+            banner = self.query_one("#header_banner", HeaderBanner)
+            banner.update_banner(width)
+        except Exception:
+            pass
 
     @on(MenuSlot.Selected)
     def handle_slot_selected(self, message: MenuSlot.Selected) -> None:

@@ -9,10 +9,11 @@ Screen {
 
 #main_container {
     width: 100%;
+    min-width: 40;
     max-width: 104;
     height: auto;
     background: #02060E;
-    padding: 1 2;
+    padding: 0 1;
     align-horizontal: center;
 }
 
@@ -34,7 +35,7 @@ HeaderBanner {
 
 #banner_subtitle {
     width: 100%;
-    height: 1;
+    height: auto;
     content-align: center middle;
     color: #8B1E3F;
     margin-top: 1;
@@ -68,6 +69,22 @@ HeaderBanner {
 
 .menu_column:last-child {
     border-right: none;
+}
+
+/* Адаптивный компактный режим для экранов уже 80 колонок */
+.compact-layout #grid_container {
+    layout: vertical;
+}
+
+.compact-layout .menu_column {
+    width: 100%;
+    border-right: none;
+    border-bottom: dashed #4A0B1A;
+    padding: 0;
+}
+
+.compact-layout .menu_column:last-child {
+    border-bottom: none;
 }
 
 /* Элементы слотов меню */
