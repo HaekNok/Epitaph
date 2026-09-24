@@ -2,6 +2,7 @@ from epitaph.ui.app import EpitaphApp
 
 
 def main() -> None:
+    # Точка входа в TUI-интерфейс сканера Epitaph.
     EpitaphApp().run()
 
 
