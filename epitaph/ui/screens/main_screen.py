@@ -1,4 +1,5 @@
 # Экран главного меню TUI-интерфейса Epitaph с адаптивной версткой
+import sys
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -11,7 +12,7 @@ from epitaph.ui.widgets.menu_slot import MenuSlot
 
 
 class MainScreen(Screen[None]):
-    # Экран главного меню с поддержкой адаптивной одно- и трехколоночной сетки
+    # Экран главного меню с поддержкой адаптивной сетки и мобильного ввода
 
     def compose(self) -> ComposeResult:
         # Компоновка интерфейсных блоков главного экрана
@@ -35,7 +36,7 @@ class MainScreen(Screen[None]):
                     yield Static(id="action_spacer")
                     yield Button("[q] > выход", id="exit_button")
                 yield Static(
-                    "[ ожидание ] Выберите номер слота или введите 'q' для выхода",
+                    "[ ожидание ] Выберите слот касанием или введите номер",
                     id="status_message",
                 )
                 with Horizontal(id="command_bar"):
@@ -67,17 +68,49 @@ class MainScreen(Screen[None]):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         # Обработка нажатий на функциональные кнопки нижней панели
         if event.button.id == "keyboard_button":
-            command_input = self.query_one("#command_input", Input)
-            command_input.focus()
-            command_input.cursor_position = len(command_input.value)
+            self.action_request_keyboard()
         elif event.button.id == "exit_button":
             self.app.exit()
 
+    def action_request_keyboard(self) -> None:
+        # Запрос экранной клавиатуры через сброс захвата мыши и статусное уведомление
+        command_input = self.query_one("#command_input", Input)
+        command_input.focus()
+        command_input.cursor_position = len(command_input.value)
+
+        # Временный сброс захвата мыши для обработки последующего касания в Termux
+        try:
+            sys.stdout.write("[?1000l[?1002l[?1003l[?1006l")
+            sys.stdout.flush()
+        except Exception:
+            pass
+
+        status = self.query_one("#status_message", Static)
+        status.update("[ клавиатура ] Коснитесь экрана для IME или нажмите VolUp+K")
+
+        # Автоматическое восстановление захвата мыши через 3 секунды
+        self.set_timer(3.0, self._restore_mouse_tracking)
+
+    def _restore_mouse_tracking(self) -> None:
+        # Восстановление режима отслеживания мыши для работы TUI
+        try:
+            sys.stdout.write("[?1000h[?1002h[?1006h")
+            sys.stdout.flush()
+        except Exception:
+            pass
+
+    @on(Input.Changed, "#command_input")
+    def handle_input_changed(self) -> None:
+        # Мгновенное восстановление мыши при начале ввода текста
+        self._restore_mouse_tracking()
+
     @on(MenuSlot.Selected)
     def handle_slot_selected(self, message: MenuSlot.Selected) -> None:
-        # Заглушка события интерактивного выбора слота
+        # Интерактивный выбор слота без необходимости использования клавиатуры
+        command_input = self.query_one("#command_input", Input)
+        command_input.value = str(message.slot_number)
         status = self.query_one("#status_message", Static)
-        status.update(f"[ заглушка ] Слот {message.slot_number} > SOON (модуль в разработке)")
+        status.update(f"[ выбор ] Слот {message.slot_number} активирован (модуль в разработке)")
 
     @on(Input.Submitted, "#command_input")
     def handle_command_submitted(self, event: Input.Submitted) -> None:
@@ -92,7 +125,7 @@ class MainScreen(Screen[None]):
         if raw_val.isdigit() and 1 <= int(raw_val) <= 30:
             slot_num = int(raw_val)
             status = self.query_one("#status_message", Static)
-            status.update(f"[ заглушка ] Выбран слот {slot_num} > SOON (модуль в разработке)")
+            status.update(f"[ выбор ] Запуск слота {slot_num} > SOON (модуль в разработке)")
         else:
             status = self.query_one("#status_message", Static)
             status.update("[ ошибка ] Введите число от 1 до 30 или 'q' для выхода")

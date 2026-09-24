@@ -31,13 +31,15 @@ def main() -> None:
     args, unknown = parser.parse_known_args()
 
     if args.no_ui:
-        sys.stdout.write("Epitaph CLI: запуск без TUI завершен.\n")
+        sys.stdout.write("Epitaph CLI: запуск без TUI завершен.
+")
         return
 
     # Проверка наличия интерактивного TTY во избежание сбоев драйвера Textual
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         sys.stderr.write(
-            "Ошибка: TUI требует интерактивного TTY-терминала. Запустите с флагом --no-ui.\n"
+            "Ошибка: TUI требует интерактивного TTY-терминала. Запустите с флагом --no-ui.
+"
         )
         sys.exit(1)
 
