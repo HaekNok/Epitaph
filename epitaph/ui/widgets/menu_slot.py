@@ -1,4 +1,5 @@
 # Виджеты слота меню и плашки выхода
+from typing import Optional
 from textual.message import Message
 from textual.widgets import Static
 
@@ -14,9 +15,13 @@ class MenuSlot(Static):
             self.slot_number = slot_number
             super().__init__()
 
-    def __init__(self, slot_number: int) -> None:
+    def __init__(self, slot_number: int, title: Optional[str] = None) -> None:
         self.slot_number = slot_number
-        formatted_label = f"{slot_number:>2} > SOON"
+        self.title = title
+        if title:
+            formatted_label = f"{slot_number}. {title}"
+        else:
+            formatted_label = f"{slot_number:>2} > SOON"
         super().__init__(formatted_label, classes="menu_slot")
 
     def on_click(self) -> None:

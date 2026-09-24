@@ -1,6 +1,7 @@
-# Экран главного меню TUI-интерфейса Epitaph с адаптивной версткой
+# Экран главного меню TUI-интерфейса Epitaph с поддержкой Maigret
 import asyncio
 import sys
+from typing import Any, Optional
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -8,24 +9,27 @@ from textual.events import Resize
 from textual.screen import Screen
 from textual.widgets import Button, Input, Static
 
-from epitaph.core.engine import ScanEngine
 from epitaph.core.events import (
     CheckResultEvent,
+    LogEvent,
     ProgressUpdateEvent,
     ScanCompletedEvent,
 )
+from epitaph.execution.maigret import MaigretExecutor
 from epitaph.models.target import TargetProfile
 from epitaph.ui.widgets.banner import HeaderBanner
 from epitaph.ui.widgets.menu_slot import MenuSlot
 
 
 class MainScreen(Screen[None]):
-    # Экран главного меню с поддержкой адаптивной сетки и мобильного ввода
+    # Экран главного меню с поддержкой слотов и поиска Maigret
 
     def __init__(self) -> None:
         super().__init__()
-        self.engine = ScanEngine()
+        self.event_queue: asyncio.Queue[Any] = asyncio.Queue()
+        self.maigret_executor = MaigretExecutor(event_queue=self.event_queue)
         self._is_scanning = False
+        self._selected_slot: Optional[int] = None
 
     def compose(self) -> ComposeResult:
         # Компоновка интерфейсных блоков главного экрана
@@ -41,7 +45,10 @@ class MainScreen(Screen[None]):
                         with Vertical(classes="menu_column"):
                             start_slot = col_idx * 10 + 1
                             for slot_idx in range(start_slot, start_slot + 10):
-                                yield MenuSlot(slot_number=slot_idx)
+                                if slot_idx == 1:
+                                    yield MenuSlot(slot_number=slot_idx, title="Nickname")
+                                else:
+                                    yield MenuSlot(slot_number=slot_idx)
 
             with Vertical(id="footer_panel"):
                 with Horizontal(id="action_bar"):
@@ -49,13 +56,13 @@ class MainScreen(Screen[None]):
                     yield Static(id="action_spacer")
                     yield Button("[q] > выход", id="exit_button")
                 yield Static(
-                    "[ ожидание ] Выберите слот касанием или введите никнейм",
+                    "[ ожидание ] Выберите слот касанием или введите номер модуля",
                     id="status_message",
                 )
                 with Horizontal(id="command_bar"):
-                    yield Static("Target username > ", id="prompt_label")
+                    yield Static("Command / Slot > ", id="prompt_label")
                     yield Input(
-                        placeholder="введите никнейм или 'q' для выхода...",
+                        placeholder="введите номер (1-30) или никнейм цели...",
                         id="command_input",
                     )
 
@@ -126,19 +133,33 @@ class MainScreen(Screen[None]):
         # Мгновенное восстановление мыши при начале ввода текста
         self._restore_mouse_tracking()
 
+    def _select_slot(self, slot_number: int) -> None:
+        # Переключение активного слота меню и адаптация приглашения ввода
+        command_input = self.query_one("#command_input", Input)
+        prompt_label = self.query_one("#prompt_label", Static)
+        status = self.query_one("#status_message", Static)
+
+        if slot_number == 1:
+            self._selected_slot = 1
+            prompt_label.update("Target Nickname > ")
+            status.update("[ выбор ] Модуль 1. Nickname активен. Введите никнейм цели...")
+            command_input.placeholder = "введите целевой никнейм или 'q' для выхода..."
+            command_input.focus()
+        else:
+            self._selected_slot = None
+            prompt_label.update("Command / Slot > ")
+            status.update(f"[ заглушка ] Слот {slot_number} > SOON (модуль в разработке)")
+            command_input.placeholder = "введите номер слота (1-30) или 'q' для выхода..."
+            command_input.focus()
+
     @on(MenuSlot.Selected)
     def handle_slot_selected(self, message: MenuSlot.Selected) -> None:
-        # Интерактивный выбор слота без необходимости использования клавиатуры
-        command_input = self.query_one("#command_input", Input)
-        status = self.query_one("#status_message", Static)
-        status.update(
-            f"[ выбор ] Слот {message.slot_number} выбран. Введите никнейм цели..."
-        )
-        command_input.focus()
+        # Обработка интерактивного выбора слота касанием или кликом мыши
+        self._select_slot(message.slot_number)
 
     @on(Input.Submitted, "#command_input")
     def handle_command_submitted(self, event: Input.Submitted) -> None:
-        # Обработка команд и запуск фонового сканирования
+        # Обработка команд терминальной строки и запуск фонового сканирования
         raw_val = event.value.strip()
         event.input.value = ""
 
@@ -149,26 +170,32 @@ class MainScreen(Screen[None]):
         if not raw_val:
             return
 
+        # Проверка числового ввода для активации слота
+        if raw_val.isdigit() and 1 <= int(raw_val) <= 30:
+            self._select_slot(int(raw_val))
+            return
+
         if self._is_scanning:
             status = self.query_one("#status_message", Static)
             status.update("[ ошибка ] Сканирование уже выполняется...")
             return
 
+        # Запуск сканирования для активного слота поиска
         target = TargetProfile(username=raw_val)
         asyncio.create_task(self._execute_scan(target))
 
     async def _execute_scan(self, target: TargetProfile) -> None:
-        # Выполнение сканирования и чтение очереди событий ядра
+        # Асинхронное выполнение сканирования Maigret без блокировки интерфейса
         self._is_scanning = True
         status = self.query_one("#status_message", Static)
-        status.update(f"[ старт ] Сканирование профиля: {target.username}...")
+        status.update(f"[ старт ] Поиск профиля: {target.username}...")
 
-        scan_task = asyncio.create_task(self.engine.run_scan(target))
+        scan_task = asyncio.create_task(self.maigret_executor.run_search(target))
 
-        while not scan_task.done() or not self.engine.event_queue.empty():
+        while not scan_task.done() or not self.event_queue.empty():
             try:
                 event = await asyncio.wait_for(
-                    self.engine.event_queue.get(), timeout=0.1
+                    self.event_queue.get(), timeout=0.1
                 )
                 if isinstance(event, CheckResultEvent):
                     status.update(
@@ -178,6 +205,8 @@ class MainScreen(Screen[None]):
                     status.update(
                         f"[ прогресс ] Завершено: {event.completed} из {event.total}"
                     )
+                elif isinstance(event, LogEvent):
+                    status.update(f"[ лог ] {event.message}")
                 elif isinstance(event, ScanCompletedEvent):
                     report_count = len(event.report_paths)
                     status.update(
@@ -188,5 +217,9 @@ class MainScreen(Screen[None]):
             except Exception:
                 break
 
-        await scan_task
-        self._is_scanning = False
+        try:
+            await scan_task
+        except Exception as exc:
+            status.update(f"[ сбой ] Ошибка сканирования: {exc}")
+        finally:
+            self._is_scanning = False
