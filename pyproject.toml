@@ -12,7 +12,6 @@ license = "MIT"
 dependencies = [
     "pydantic>=2.7.0",
     "httpx[http2]>=0.27.0",
-    "playwright>=1.44.0",
     "textual>=0.60.0",
     "jinja2>=3.1.4",
     "aiofiles>=23.2.1",
@@ -20,11 +19,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Опциональная зависимость для чекеров на базе браузера Chromium
+browser = [
+    "playwright>=1.44.0",
+]
+full = [
+    "playwright>=1.44.0",
+]
 dev = [
     "pytest>=8.2.0",
     "pytest-asyncio>=0.23.7",
     "ruff>=0.4.0",
     "mypy>=1.10.0",
+    "playwright>=1.44.0",
 ]
 
 [project.scripts]
@@ -38,3 +45,13 @@ target-version = "py311"
 python_version = "3.11"
 strict = true
 ignore_missing_imports = true
+
+# Рекомендации по установке и сборке в среде Termux (Android aarch64):
+# 1. При сборке pydantic-core на устройствах с 4-6 ГБ ОЗУ задайте переменные окружения:
+#    export CARGO_BUILD_JOBS=2
+#    export RUSTFLAGS="-C lto=no -C opt-level=1"
+# 2. Для предотвращения OOM-killer создайте swap-файл размером 1 ГБ:
+#    fallocate -l 1G "$PREFIX/tmp/swapfile" && chmod 600 "$PREFIX/tmp/swapfile"
+#    mkswap "$PREFIX/tmp/swapfile" && swapon "$PREFIX/tmp/swapfile"
+# 3. В качестве альтернативы используйте предсобранные пакеты из tur-repo:
+#    pkg install tur-repo && pkg install python-pydantic
