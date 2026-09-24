@@ -1,0 +1,36 @@
+# Виртуальное окружение
+.venv/
+env/
+venv/
+
+# Байткод и кэш Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Дистрибутивы и сборка
+build/
+dist/
+*.egg-info/
+
+# Кэши тестов и статических анализаторов
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Артефакты Playwright
+test-results/
+
+# Директория сгенерированных отчетов сканирования
+reports/
+
+# Конфигурационные файлы окружения
+.env
+
+# Служебные файлы редакторов и операционных систем
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
