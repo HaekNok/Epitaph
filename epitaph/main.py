@@ -33,7 +33,7 @@ def main() -> None:
     if args.no_ui:
         sys.stdout.write("Epitaph CLI: запуск без TUI завершен.
 ")
-        return
+        sys.exit(0)
 
     # Проверка наличия интерактивного TTY во избежание сбоев драйвера Textual
     if not sys.stdin.isatty() or not sys.stdout.isatty():
@@ -44,6 +44,7 @@ def main() -> None:
         sys.exit(1)
 
     EpitaphApp().run()
+    sys.exit(0)
 
 
 if __name__ == "__main__":
