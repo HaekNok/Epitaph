@@ -1,0 +1,163 @@
+/* Crimson Noir палитра: глубокий темный (#02060E) и акцентный бордовый (#C50337) */
+
+Screen {
+    background: #02060E;
+    color: #C50337;
+    overflow-y: auto;
+    align: center top;
+}
+
+#main_container {
+    width: 100%;
+    max-width: 104;
+    height: auto;
+    background: #02060E;
+    padding: 1 2;
+    align-horizontal: center;
+}
+
+/* Стилизация верхнего ASCII-баннера */
+HeaderBanner {
+    width: 100%;
+    height: auto;
+    align-horizontal: center;
+    margin-bottom: 1;
+}
+
+#ascii_art {
+    width: 100%;
+    height: auto;
+    content-align: center middle;
+    color: #C50337;
+    text-style: bold;
+}
+
+#banner_subtitle {
+    width: 100%;
+    height: 1;
+    content-align: center middle;
+    color: #8B1E3F;
+    margin-top: 1;
+}
+
+/* Стилизация терминальной рамки и сетки меню */
+#menu_frame {
+    width: 100%;
+    height: auto;
+    border: heavy #C50337;
+    border-title-align: center;
+    border-title-color: #C50337;
+    border-title-style: bold;
+    background: #02060E;
+    padding: 1 1;
+    margin-bottom: 1;
+}
+
+#grid_container {
+    width: 100%;
+    height: auto;
+    layout: horizontal;
+}
+
+.menu_column {
+    width: 1fr;
+    height: auto;
+    padding: 0 1;
+    border-right: dashed #4A0B1A;
+}
+
+.menu_column:last-child {
+    border-right: none;
+}
+
+/* Элементы слотов меню */
+MenuSlot {
+    width: 100%;
+    height: 1;
+    color: #C50337;
+    padding: 0 1;
+}
+
+MenuSlot:hover {
+    background: #C50337;
+    color: #02060E;
+    text-style: bold;
+}
+
+MenuSlot:focus {
+    background: #8B1E3F;
+    color: #FFFFFF;
+    text-style: bold;
+}
+
+/* Нижняя панель управления и выхода */
+#footer_panel {
+    width: 100%;
+    height: auto;
+    align-horizontal: center;
+    margin-top: 1;
+}
+
+ExitBadge {
+    width: auto;
+    height: 3;
+    border: heavy #C50337;
+    padding: 0 3;
+    background: #02060E;
+    color: #C50337;
+    text-style: bold;
+    content-align: center middle;
+    margin-bottom: 1;
+}
+
+ExitBadge:hover {
+    background: #C50337;
+    color: #02060E;
+}
+
+ExitBadge:focus {
+    background: #8B1E3F;
+    color: #FFFFFF;
+}
+
+#status_message {
+    width: 100%;
+    height: 1;
+    content-align: center middle;
+    color: #8B1E3F;
+    margin-bottom: 1;
+}
+
+#command_bar {
+    width: 100%;
+    height: 3;
+    border: heavy #8B1E3F;
+    background: #02060E;
+    padding: 0 1;
+    align-vertical: middle;
+}
+
+#command_bar:focus-within {
+    border: heavy #C50337;
+}
+
+#prompt_label {
+    width: auto;
+    height: 1;
+    color: #C50337;
+    text-style: bold;
+    padding: 0 1;
+}
+
+#command_input {
+    width: 1fr;
+    height: 1;
+    background: #02060E;
+    color: #D4D7DD;
+    border: none;
+    padding: 0;
+}
+
+#command_input:focus {
+    border: none;
+}
