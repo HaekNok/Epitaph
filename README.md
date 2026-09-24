@@ -25,7 +25,7 @@ cd Epitaph
 python3 -m venv .venv
 source .venv/bin/activate
 
-pip install -e .
+pip install -e ".[full]"
 playwright install chromium  # опционально, для браузерных чекеров
 ```
 
@@ -49,16 +49,16 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
-3. Установка зависимостей:
-
-*Рекомендация по Pydantic:* Начиная со второй версии (Rust pydantic-core), сборка пакета на Android может завершаться аварийно из-за нехватки оперативной памяти. Рекомендуется установить версию Pydantic v1 перед инсталляцией проекта:
+3. Установка Pydantic v2:
+Проект строго использует API Pydantic v2 (ConfigDict, model_dump_json, model_copy). Во избежание тяжелой компиляции Rust-пакета pydantic-core и вылетов по OOM, рекомендуется установить готовый бинарный пакет из TUR (Termux User Repository):
 
 ```bash
-pip install "pydantic<2"
+pkg install -y tur-repo
+pkg install -y python-pydantic
 pip install -e .
 ```
 
-*Сборка с Pydantic v2 (при наличии swap/достаточного объема RAM):*
+Альтернативная сборка pydantic-core из исходников (требуется swap от 1 ГБ):
 
 ```bash
 export CARGO_BUILD_JOBS=2

@@ -1,4 +1,5 @@
 # Экран главного меню TUI-интерфейса Epitaph с адаптивной версткой
+import asyncio
 import sys
 from textual import on
 from textual.app import ComposeResult
@@ -7,12 +8,24 @@ from textual.events import Resize
 from textual.screen import Screen
 from textual.widgets import Button, Input, Static
 
+from epitaph.core.engine import ScanEngine
+from epitaph.core.events import (
+    CheckResultEvent,
+    ProgressUpdateEvent,
+    ScanCompletedEvent,
+)
+from epitaph.models.target import TargetProfile
 from epitaph.ui.widgets.banner import HeaderBanner
 from epitaph.ui.widgets.menu_slot import MenuSlot
 
 
 class MainScreen(Screen[None]):
     # Экран главного меню с поддержкой адаптивной сетки и мобильного ввода
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.engine = ScanEngine()
+        self._is_scanning = False
 
     def compose(self) -> ComposeResult:
         # Компоновка интерфейсных блоков главного экрана
@@ -36,13 +49,13 @@ class MainScreen(Screen[None]):
                     yield Static(id="action_spacer")
                     yield Button("[q] > выход", id="exit_button")
                 yield Static(
-                    "[ ожидание ] Выберите слот касанием или введите номер",
+                    "[ ожидание ] Выберите слот касанием или введите никнейм",
                     id="status_message",
                 )
                 with Horizontal(id="command_bar"):
-                    yield Static("Select function number > ", id="prompt_label")
+                    yield Static("Target username > ", id="prompt_label")
                     yield Input(
-                        placeholder="введите номер (1-30) или 'q'...",
+                        placeholder="введите никнейм или 'q' для выхода...",
                         id="command_input",
                     )
 
@@ -73,17 +86,21 @@ class MainScreen(Screen[None]):
             self.app.exit()
 
     def action_request_keyboard(self) -> None:
-        # Запрос экранной клавиатуры через сброс захвата мыши и статусное уведомление
+        # Сброс режима отслеживания мыши через драйвер приложения Textual
         command_input = self.query_one("#command_input", Input)
         command_input.focus()
         command_input.cursor_position = len(command_input.value)
 
-        # Временный сброс захвата мыши для обработки последующего касания в Termux
-        try:
-            sys.stdout.write("[?1000l[?1002l[?1003l[?1006l")
-            sys.stdout.flush()
-        except Exception:
-            pass
+        driver = getattr(self.app, "_driver", None)
+        seq = "[?1000l[?1002l[?1003l[?1006l"
+        if driver and hasattr(driver, "write"):
+            driver.write(seq)
+        else:
+            try:
+                sys.stdout.write(seq)
+                sys.stdout.flush()
+            except Exception:
+                pass
 
         status = self.query_one("#status_message", Static)
         status.update("[ клавиатура ] Коснитесь экрана для IME или нажмите VolUp+K")
@@ -92,12 +109,17 @@ class MainScreen(Screen[None]):
         self.set_timer(3.0, self._restore_mouse_tracking)
 
     def _restore_mouse_tracking(self) -> None:
-        # Восстановление режима отслеживания мыши для работы TUI
-        try:
-            sys.stdout.write("[?1000h[?1002h[?1006h")
-            sys.stdout.flush()
-        except Exception:
-            pass
+        # Восстановление режима отслеживания мыши через драйвер Textual
+        driver = getattr(self.app, "_driver", None)
+        seq = "[?1000h[?1002h[?1006h"
+        if driver and hasattr(driver, "write"):
+            driver.write(seq)
+        else:
+            try:
+                sys.stdout.write(seq)
+                sys.stdout.flush()
+            except Exception:
+                pass
 
     @on(Input.Changed, "#command_input")
     def handle_input_changed(self) -> None:
@@ -108,24 +130,63 @@ class MainScreen(Screen[None]):
     def handle_slot_selected(self, message: MenuSlot.Selected) -> None:
         # Интерактивный выбор слота без необходимости использования клавиатуры
         command_input = self.query_one("#command_input", Input)
-        command_input.value = str(message.slot_number)
         status = self.query_one("#status_message", Static)
-        status.update(f"[ выбор ] Слот {message.slot_number} активирован (модуль в разработке)")
+        status.update(
+            f"[ выбор ] Слот {message.slot_number} выбран. Введите никнейм цели..."
+        )
+        command_input.focus()
 
     @on(Input.Submitted, "#command_input")
     def handle_command_submitted(self, event: Input.Submitted) -> None:
-        # Обработка команд в нижней терминальной строке
-        raw_val = event.value.strip().lower()
+        # Обработка команд и запуск фонового сканирования
+        raw_val = event.value.strip()
         event.input.value = ""
 
-        if raw_val in ("q", "quit", "exit", "выход"):
+        if raw_val.lower() in ("q", "quit", "exit", "выход"):
             self.app.exit()
             return
 
-        if raw_val.isdigit() and 1 <= int(raw_val) <= 30:
-            slot_num = int(raw_val)
+        if not raw_val:
+            return
+
+        if self._is_scanning:
             status = self.query_one("#status_message", Static)
-            status.update(f"[ выбор ] Запуск слота {slot_num} > SOON (модуль в разработке)")
-        else:
-            status = self.query_one("#status_message", Static)
-            status.update("[ ошибка ] Введите число от 1 до 30 или 'q' для выхода")
+            status.update("[ ошибка ] Сканирование уже выполняется...")
+            return
+
+        target = TargetProfile(username=raw_val)
+        asyncio.create_task(self._execute_scan(target))
+
+    async def _execute_scan(self, target: TargetProfile) -> None:
+        # Выполнение сканирования и чтение очереди событий ядра
+        self._is_scanning = True
+        status = self.query_one("#status_message", Static)
+        status.update(f"[ старт ] Сканирование профиля: {target.username}...")
+
+        scan_task = asyncio.create_task(self.engine.run_scan(target))
+
+        while not scan_task.done() or not self.engine.event_queue.empty():
+            try:
+                event = await asyncio.wait_for(
+                    self.engine.event_queue.get(), timeout=0.1
+                )
+                if isinstance(event, CheckResultEvent):
+                    status.update(
+                        f"[ {event.result.platform_name} ] {event.result.status.value}"
+                    )
+                elif isinstance(event, ProgressUpdateEvent):
+                    status.update(
+                        f"[ прогресс ] Завершено: {event.completed} из {event.total}"
+                    )
+                elif isinstance(event, ScanCompletedEvent):
+                    report_count = len(event.report_paths)
+                    status.update(
+                        f"[ готово ] Сессия {event.session_id}: сохранено отчетов: {report_count}"
+                    )
+            except asyncio.TimeoutError:
+                continue
+            except Exception:
+                break
+
+        await scan_task
+        self._is_scanning = False

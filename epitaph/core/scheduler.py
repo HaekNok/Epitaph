@@ -39,10 +39,14 @@ class TaskScheduler:
         self,
         checker: BasePlatformChecker,
         target: TargetProfile,
-        result_queue: asyncio.Queue[CheckResult],
     ) -> CheckResult:
+        # Выполнение проверки платформы с контролем параллелизма и лимитов
         async with self.semaphore:
-            proxy = await self.proxy_manager.lease_proxy() if self.proxy_manager else None
+            proxy = (
+                await self.proxy_manager.lease_proxy()
+                if self.proxy_manager
+                else None
+            )
             domain = self.rate_limiter.extract_domain(checker.name)
             await self.rate_limiter.acquire(domain, checker.rate_limit_delay)
 
@@ -58,7 +62,9 @@ class TaskScheduler:
                         await context.close()
 
                 if self.proxy_manager and proxy:
-                    await self.proxy_manager.report_success(proxy, result.response_time_ms)
+                    await self.proxy_manager.report_success(
+                        proxy, result.response_time_ms
+                    )
 
             except Exception as exc:
                 if self.proxy_manager and proxy:
@@ -72,5 +78,4 @@ class TaskScheduler:
                     error_message=str(exc),
                 )
 
-            await result_queue.put(result)
             return result
