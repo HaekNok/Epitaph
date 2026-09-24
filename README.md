@@ -45,15 +45,6 @@ pip install -e .
 python -m epitaph
 ```
 
-### 5. Запуск скриптов автоматизации коммитов
-
-Если вы загружаете скрипты публикации изменений на GitHub через браузер или Google Диск в системную папку загрузок Android, перейдите в нее и запустите нужный скрипт:
-
-```bash
-storage/downloads && python publish_readme_commits.py
-```
-*(или `cd storage/downloads && python <имя_скрипта>.py`)*
-
 ## Установка на десктопном Linux / macOS / Windows
 
 ```bash
