@@ -2,7 +2,6 @@
 import argparse
 import sys
 from epitaph import __version__
-from epitaph.ui.app import EpitaphApp
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -31,17 +30,18 @@ def main() -> None:
     args, unknown = parser.parse_known_args()
 
     if args.no_ui:
-        sys.stdout.write("Epitaph CLI: запуск без TUI завершен.
-")
+        print("Epitaph CLI: запуск без TUI завершен.")
         sys.exit(0)
 
     # Проверка наличия интерактивного TTY во избежание сбоев драйвера Textual
     if not sys.stdin.isatty() or not sys.stdout.isatty():
-        sys.stderr.write(
-            "Ошибка: TUI требует интерактивного TTY-терминала. Запустите с флагом --no-ui.
-"
+        print(
+            "Ошибка: TUI требует интерактивного TTY-терминала. Запустите с флагом --no-ui.",
+            file=sys.stderr,
         )
         sys.exit(1)
+
+    from epitaph.ui.app import EpitaphApp
 
     EpitaphApp().run()
     sys.exit(0)

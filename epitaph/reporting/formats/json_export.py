@@ -1,3 +1,4 @@
+# Экспортер результатов сканирования в формат JSON с поддержкой Pydantic v1 и v2
 import aiofiles
 from pathlib import Path
 from epitaph.models.result import ScanSessionResult
@@ -10,7 +11,11 @@ class JsonReportExporter(BaseReportExporter):
         return "json"
 
     async def export(self, data: ScanSessionResult, output_path: Path) -> Path:
-        content = data.model_dump_json(indent=2)
+        # Сериализация с проверкой доступной версии интерфейса Pydantic
+        if hasattr(data, "model_dump_json"):
+            content = data.model_dump_json(indent=2)
+        else:
+            content = data.json(indent=2)
         async with aiofiles.open(output_path, mode="w", encoding="utf-8") as f:
             await f.write(content)
         return output_path
