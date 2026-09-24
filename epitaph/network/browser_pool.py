@@ -23,10 +23,17 @@ except (ImportError, RuntimeError):
 class PlaywrightBrowserPool:
     # Менеджер единого процесса браузера и изолированных контекстов
 
-    def __init__(self, user_agent_manager: Optional[UserAgentManager] = None) -> None:
+    def __init__(
+        self, user_agent_manager: Optional[UserAgentManager] = None
+    ) -> None:
         self.user_agent_manager = user_agent_manager or UserAgentManager()
         self._playwright: Optional[Any] = None
         self._browser: Optional[Browser] = None
+
+    @property
+    def is_available(self) -> bool:
+        # Флаг доступности браузерного движка в системе
+        return HAS_PLAYWRIGHT
 
     async def start(self) -> None:
         # Запуск процесса Chromium с валидацией платформенной поддержки
@@ -41,7 +48,9 @@ class PlaywrightBrowserPool:
                 args=["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
             )
 
-    async def create_context(self, proxy: Optional[ProxyEntity] = None) -> BrowserContext:
+    async def create_context(
+        self, proxy: Optional[ProxyEntity] = None
+    ) -> BrowserContext:
         # Создание эфемерного контекста с проверкой доступности среды
         if not HAS_PLAYWRIGHT:
             raise RuntimeError(
