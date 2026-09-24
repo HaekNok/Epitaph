@@ -1,3 +1,4 @@
+# Планировщик выполнения чекеров с поддержкой HTTP и браузерного пула
 import asyncio
 from typing import Optional
 from epitaph.core.limiter import DomainRateLimiter
@@ -11,6 +12,8 @@ from epitaph.network.proxy_manager import ProxyManager
 
 
 class TaskScheduler:
+    # Планировщик задач с раздельным распределением HTTP и браузерных проверок
+
     def __init__(
         self,
         max_concurrent_workers: int = 10,
@@ -23,7 +26,14 @@ class TaskScheduler:
         self.rate_limiter = rate_limiter or DomainRateLimiter()
         self.proxy_manager = proxy_manager
         self.http_client = http_client or HttpClientManager()
-        self.browser_pool = browser_pool or PlaywrightBrowserPool()
+        self._browser_pool = browser_pool
+
+    @property
+    def browser_pool(self) -> PlaywrightBrowserPool:
+        # Ленивая инициализация пула браузеров только при прямом обращении
+        if self._browser_pool is None:
+            self._browser_pool = PlaywrightBrowserPool()
+        return self._browser_pool
 
     async def run_checker(
         self,

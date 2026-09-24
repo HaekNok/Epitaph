@@ -1,16 +1,32 @@
-from typing import Optional
-from playwright.async_api import Browser, BrowserContext, async_playwright
+# Менеджер браузерных контекстов с поддержкой режима без Playwright
+from typing import Any, Optional
 from epitaph.models.proxy import ProxyEntity
 from epitaph.utils.user_agents import UserAgentManager
 
+try:
+    from playwright.async_api import Browser, BrowserContext, async_playwright
+
+    HAS_PLAYWRIGHT = True
+except (ImportError, RuntimeError):
+    Browser = Any  # type: ignore
+    BrowserContext = Any  # type: ignore
+    HAS_PLAYWRIGHT = False
+
 
 class PlaywrightBrowserPool:
+    # Менеджер единого процесса браузера и изолированных контекстов
+
     def __init__(self, user_agent_manager: Optional[UserAgentManager] = None) -> None:
         self.user_agent_manager = user_agent_manager or UserAgentManager()
-        self._playwright = None
+        self._playwright: Optional[Any] = None
         self._browser: Optional[Browser] = None
 
     async def start(self) -> None:
+        # Запуск процесса Chromium с валидацией платформенной поддержки
+        if not HAS_PLAYWRIGHT:
+            raise RuntimeError(
+                "Playwright не поддерживается в среде Android Termux. Используйте HTTP-режим."
+            )
         if not self._browser:
             self._playwright = await async_playwright().start()
             self._browser = await self._playwright.chromium.launch(
@@ -19,6 +35,11 @@ class PlaywrightBrowserPool:
             )
 
     async def create_context(self, proxy: Optional[ProxyEntity] = None) -> BrowserContext:
+        # Создание эфемерного контекста с проверкой доступности среды
+        if not HAS_PLAYWRIGHT:
+            raise RuntimeError(
+                "Playwright не поддерживается в среде Android Termux. Используйте HTTP-режим."
+            )
         if not self._browser:
             await self.start()
 
@@ -35,6 +56,7 @@ class PlaywrightBrowserPool:
         )
 
     async def close(self) -> None:
+        # Корректное освобождение ресурсов браузера и остановка драйвера
         if self._browser:
             await self._browser.close()
             self._browser = None
