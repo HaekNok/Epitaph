@@ -1,4 +1,4 @@
-# Модуль проверки существования аккаунта GitHub через HTTP API
+# Чекер профиля GitHub с соблюдением контракта BasePlatformChecker
 import time
 from typing import Any, Dict
 import httpx
@@ -11,7 +11,7 @@ from epitaph.models.target import TargetProfile
 
 @register_checker
 class GitHubChecker(BasePlatformChecker):
-    # Чекер профилей GitHub с HTTP-проверкой без использования браузера
+    # Модуль асинхронной проверки профиля на платформе GitHub
 
     @property
     def name(self) -> str:
@@ -23,19 +23,19 @@ class GitHubChecker(BasePlatformChecker):
 
     @property
     def rate_limit_delay(self) -> float:
+        # Задержка между запросами к GitHub
         return 0.3
 
     @property
     def headers(self) -> Dict[str, str]:
+        # Пользовательские HTTP-заголовки
         return {
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
         }
 
-    async def check_browser(
-        self, target: TargetProfile, context: Any
-    ) -> CheckResult:
-        # Возврат статуса ошибки конфигурации вместо проброса исключения
+    async def check_browser(self, target: TargetProfile, context: Any) -> CheckResult:
+        # Возврат детерминированного результата при неподдерживаемом типе выполнения
         return CheckResult(
             platform_name=self.name,
             target=target,
@@ -49,7 +49,7 @@ class GitHubChecker(BasePlatformChecker):
         target: TargetProfile,
         client: httpx.AsyncClient,
     ) -> CheckResult:
-        # Проверка доступности профиля по HTTP кодам ответа
+        # Выполнение асинхронной проверки доступности профиля по HTTP
         url = f"https://github.com/{target.username}"
         start_time = time.perf_counter()
         try:
@@ -57,7 +57,6 @@ class GitHubChecker(BasePlatformChecker):
             elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
             if response.status_code == 200:
-                # Маркер страницы soft-404 при удаленном или скрытом профиле GitHub
                 if "Not Found" in response.text and "Find what you need" in response.text:
                     status = DetectionStatus.NOT_FOUND
                     profile_url = None
