@@ -256,7 +256,7 @@ class MainScreen(Screen[None]):
             report_path = await self.engine.dispatcher.export_html(
                 self._last_session_result
             )
-            url_link = report_path.as_uri()
-            status.update(f"[ HTML создан ] {url_link}")
+            file_url = f"file://{report_path.resolve()}"
+            status.update(f"[ HTML создан ] {file_url}")
         except Exception as exc:
             status.update(f"[ сбой ] Ошибка создания HTML: {exc}")
