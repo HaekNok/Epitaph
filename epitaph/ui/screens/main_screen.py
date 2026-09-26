@@ -1,6 +1,7 @@
 # Экран главного меню TUI-интерфейса Epitaph с поддержкой Maigret
 import asyncio
 import sys
+from pathlib import Path
 from typing import Any, Optional
 from textual import on
 from textual.app import ComposeResult
@@ -24,6 +25,10 @@ from epitaph.ui.widgets.menu_slot import MenuSlot
 
 class MainScreen(Screen[None]):
     # Экран главного меню с поддержкой слотов и поиска Maigret
+    BINDINGS = [
+        ("s", "save_html", "Сохранить HTML"),
+        ("o", "save_html", "Открыть HTML"),
+    ]
 
     def __init__(self) -> None:
         super().__init__()
@@ -179,6 +184,15 @@ class MainScreen(Screen[None]):
         if not raw_val:
             return
 
+        # Проверка текстовых команд сохранения и открытия отчета
+        if raw_val.lower() in ("html", "save", "open", "отчет", "сохранить"):
+            if self._last_session_result is not None:
+                asyncio.create_task(self.action_save_html())
+            else:
+                status = self.query_one("#status_message", Static)
+                status.update("[ ошибка ] Нет данных предыдущего сканирования")
+            return
+
         # Проверка числового ввода для активации слота
         if raw_val.isdigit() and 1 <= int(raw_val) <= 30:
             self._select_slot(int(raw_val))
@@ -224,10 +238,15 @@ class MainScreen(Screen[None]):
                 elif isinstance(event, LogEvent):
                     status.update(f"[ лог ] {event.message}")
                 elif isinstance(event, ScanCompletedEvent):
-                    report_count = len(event.report_paths)
-                    status.update(
-                        f"[ готово ] Сессия {event.session_id}: сохранено отчетов: {report_count}"
-                    )
+                    html_path = event.report_paths.get("html_direct") or event.report_paths.get("html")
+                    if html_path:
+                        short_path = str(html_path).replace(str(Path.home()), "~")
+                        status.update(f"[ готово ] HTML: {short_path}")
+                    else:
+                        report_count = len(event.report_paths)
+                        status.update(
+                            f"[ готово ] Сессия {event.session_id}: сохранено отчетов: {report_count}"
+                        )
                     save_button = self.query_one("#save_html_button", Button)
                     save_button.display = True
             except asyncio.TimeoutError:
@@ -245,7 +264,7 @@ class MainScreen(Screen[None]):
             self._is_scanning = False
 
     async def action_save_html(self) -> None:
-        # Экспорт HTML-отчета по запросу пользователя и отображение ссылки
+        # Экспорт HTML-отчета по запросу пользователя, вывод пути и автооткрытие
         status = self.query_one("#status_message", Static)
         if self._last_session_result is None:
             status.update("[ ошибка ] Нет данных предыдущего сканирования")
@@ -256,7 +275,7 @@ class MainScreen(Screen[None]):
             report_path = await self.engine.dispatcher.export_html(
                 self._last_session_result
             )
-            file_url = f"file://{report_path.resolve()}"
-            status.update(f"[ HTML создан ] {file_url}")
+            short_path = str(report_path).replace(str(Path.home()), "~")
+            status.update(f"[ HTML создан ] {short_path}")
         except Exception as exc:
             status.update(f"[ сбой ] Ошибка создания HTML: {exc}")
