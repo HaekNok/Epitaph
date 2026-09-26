@@ -1,7 +1,5 @@
-# Экран главного меню TUI-интерфейса Epitaph с поддержкой Maigret
 import asyncio
 import sys
-from pathlib import Path
 from typing import Any, Optional
 from textual import on
 from textual.app import ComposeResult
@@ -24,23 +22,16 @@ from epitaph.ui.widgets.menu_slot import MenuSlot
 
 
 class MainScreen(Screen[None]):
-    # Экран главного меню с поддержкой слотов и поиска Maigret
-    BINDINGS = [
-        ("s", "save_html", "Сохранить HTML"),
-        ("o", "save_html", "Открыть HTML"),
-    ]
-
     def __init__(self) -> None:
         super().__init__()
         self.event_queue: asyncio.Queue[Any] = asyncio.Queue()
         self.maigret_executor = MaigretExecutor(event_queue=self.event_queue)
         self.engine = self.maigret_executor.engine
-        self._is_scanning: bool = False
+        self._is_scanning = False
         self._selected_slot: Optional[int] = None
         self._last_session_result: Optional[ScanSessionResult] = None
 
     def compose(self) -> ComposeResult:
-        # Компоновка интерфейсных блоков главного экрана
         with Vertical(id="main_container"):
             yield HeaderBanner(id="header_banner")
 
@@ -48,15 +39,11 @@ class MainScreen(Screen[None]):
             menu_frame.border_title = "ДОСТУПНЫЕ МОДУЛИ"
             with menu_frame:
                 with Horizontal(id="grid_container"):
-                    # Разбиение 30 слотов на колонки с адаптивным поведением
-                    for col_idx in range(3):
+                    for col in range(3):
                         with Vertical(classes="menu_column"):
-                            start_slot = col_idx * 10 + 1
-                            for slot_idx in range(start_slot, start_slot + 10):
-                                if slot_idx == 1:
-                                    yield MenuSlot(slot_number=slot_idx, title="Nickname")
-                                else:
-                                    yield MenuSlot(slot_number=slot_idx)
+                            start = col * 10 + 1
+                            for slot in range(start, start + 10):
+                                yield MenuSlot(slot_number=slot, title="Nickname" if slot == 1 else None)
 
             with Vertical(id="footer_panel"):
                 with Horizontal(id="action_bar"):
@@ -77,28 +64,21 @@ class MainScreen(Screen[None]):
                     )
 
     def on_mount(self) -> None:
-        # Установка адаптивной геометрии и начального состояния кнопок
         self._apply_responsive_layout(self.size.width)
-        save_btn = self.query_one("#save_html_button", Button)
-        save_btn.display = False
+        self.query_one("#save_html_button", Button).display = False
 
     def on_resize(self, event: Resize) -> None:
-        # Реакция на изменение размеров терминала в рантайме
         self._apply_responsive_layout(event.size.width)
 
     def _apply_responsive_layout(self, width: int) -> None:
-        # Переключение между трехколоночным и одноколоночным представлением
         is_compact = width < 80
         try:
-            container = self.query_one("#main_container")
-            container.set_class(is_compact, "compact-layout")
-            banner = self.query_one("#header_banner", HeaderBanner)
-            banner.update_banner(width)
+            self.query_one("#main_container").set_class(is_compact, "compact-layout")
+            self.query_one("#header_banner", HeaderBanner).update_banner(width)
         except Exception:
             pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        # Обработка нажатий на функциональные кнопки нижней панели
         if event.button.id == "keyboard_button":
             self.action_request_keyboard()
         elif event.button.id == "save_html_button":
@@ -107,10 +87,10 @@ class MainScreen(Screen[None]):
             self.app.exit()
 
     def action_request_keyboard(self) -> None:
-        # Сброс режима отслеживания мыши через драйвер приложения Textual
-        command_input = self.query_one("#command_input", Input)
-        command_input.focus()
-        command_input.cursor_position = len(command_input.value)
+        # Временный сброс захвата мыши для отображения экранной клавиатуры в Termux
+        cmd_input = self.query_one("#command_input", Input)
+        cmd_input.focus()
+        cmd_input.cursor_position = len(cmd_input.value)
 
         driver = getattr(self.app, "_driver", None)
         seq = "[?1000l[?1002l[?1003l[?1006l"
@@ -123,14 +103,12 @@ class MainScreen(Screen[None]):
             except Exception:
                 pass
 
-        status = self.query_one("#status_message", Static)
-        status.update("[ клавиатура ] Коснитесь экрана для IME или нажмите VolUp+K")
-
-        # Автоматическое восстановление захвата мыши через 3 секунды
+        self.query_one("#status_message", Static).update(
+            "[ клавиатура ] Коснитесь экрана для IME или нажмите VolUp+K"
+        )
         self.set_timer(3.0, self._restore_mouse_tracking)
 
     def _restore_mouse_tracking(self) -> None:
-        # Восстановление режима отслеживания мыши через драйвер Textual
         driver = getattr(self.app, "_driver", None)
         seq = "[?1000h[?1002h[?1006h"
         if driver and hasattr(driver, "write"):
@@ -144,79 +122,57 @@ class MainScreen(Screen[None]):
 
     @on(Input.Changed, "#command_input")
     def handle_input_changed(self) -> None:
-        # Мгновенное восстановление мыши при начале ввода текста
         self._restore_mouse_tracking()
 
-    def _select_slot(self, slot_number: int) -> None:
-        # Переключение активного слота меню и адаптация приглашения ввода
-        command_input = self.query_one("#command_input", Input)
-        prompt_label = self.query_one("#prompt_label", Static)
+    def _select_slot(self, slot: int) -> None:
+        cmd_input = self.query_one("#command_input", Input)
+        prompt = self.query_one("#prompt_label", Static)
         status = self.query_one("#status_message", Static)
 
-        if slot_number == 1:
+        if slot == 1:
             self._selected_slot = 1
-            prompt_label.update("Target Nickname > ")
+            prompt.update("Target Nickname > ")
             status.update("[ выбор ] Модуль 1. Nickname активен. Введите никнейм цели...")
-            command_input.placeholder = "введите целевой никнейм или 'q' для выхода..."
-            command_input.focus()
+            cmd_input.placeholder = "введите целевой никнейм или 'q' для выхода..."
         else:
             self._selected_slot = None
-            prompt_label.update("Command / Slot > ")
-            status.update(f"[ заглушка ] Слот {slot_number} > SOON (модуль в разработке)")
-            command_input.placeholder = "введите номер слота (1-30) или 'q' для выхода..."
-            command_input.focus()
+            prompt.update("Command / Slot > ")
+            status.update(f"[ заглушка ] Слот {slot} > SOON (модуль в разработке)")
+            cmd_input.placeholder = "введите номер слота (1-30) или 'q' для выхода..."
+
+        cmd_input.focus()
 
     @on(MenuSlot.Selected)
     def handle_slot_selected(self, message: MenuSlot.Selected) -> None:
-        # Обработка интерактивного выбора слота касанием или кликом мыши
         self._select_slot(message.slot_number)
 
     @on(Input.Submitted, "#command_input")
     def handle_command_submitted(self, event: Input.Submitted) -> None:
-        # Обработка команд терминальной строки и запуск фонового сканирования
-        raw_val = event.value.strip()
+        raw = event.value.strip()
         event.input.value = ""
 
-        if raw_val.lower() in ("q", "quit", "exit", "выход"):
+        if raw.lower() in ("q", "quit", "exit", "выход"):
             self.app.exit()
             return
 
-        if not raw_val:
+        if not raw:
             return
 
-        # Проверка текстовых команд сохранения и открытия отчета
-        if raw_val.lower() in ("html", "save", "open", "отчет", "сохранить"):
-            if self._last_session_result is not None:
-                asyncio.create_task(self.action_save_html())
-            else:
-                status = self.query_one("#status_message", Static)
-                status.update("[ ошибка ] Нет данных предыдущего сканирования")
+        if raw.isdigit() and 1 <= int(raw) <= 30:
+            self._select_slot(int(raw))
             return
 
-        # Проверка числового ввода для активации слота
-        if raw_val.isdigit() and 1 <= int(raw_val) <= 30:
-            self._select_slot(int(raw_val))
-            return
-
+        status = self.query_one("#status_message", Static)
         if self._is_scanning:
-            status = self.query_one("#status_message", Static)
             status.update("[ ошибка ] Сканирование уже выполняется...")
             return
 
-        # Немедленное обновление статуса обработки запроса
-        status = self.query_one("#status_message", Static)
         status.update("[ ожидание ] Запрос обрабатывается")
-
-        # Запуск сканирования для активного слота поиска
-        target = TargetProfile(username=raw_val)
-        asyncio.create_task(self._execute_scan(target))
+        asyncio.create_task(self._execute_scan(TargetProfile(username=raw)))
 
     async def _execute_scan(self, target: TargetProfile) -> None:
-        # Асинхронное выполнение сканирования Maigret без блокировки интерфейса
         self._is_scanning = True
         status = self.query_one("#status_message", Static)
-
-        # Скрываем кнопку сохранения перед началом новой сессии
         save_btn = self.query_one("#save_html_button", Button)
         save_btn.display = False
 
@@ -224,31 +180,16 @@ class MainScreen(Screen[None]):
 
         while not scan_task.done() or not self.event_queue.empty():
             try:
-                event = await asyncio.wait_for(
-                    self.event_queue.get(), timeout=0.1
-                )
+                event = await asyncio.wait_for(self.event_queue.get(), timeout=0.1)
                 if isinstance(event, CheckResultEvent):
-                    status.update(
-                        f"[ {event.result.platform_name} ] {event.result.status.value}"
-                    )
+                    status.update(f"[ {event.result.platform_name} ] {event.result.status.value}")
                 elif isinstance(event, ProgressUpdateEvent):
-                    status.update(
-                        f"[ прогресс ] Завершено: {event.completed} из {event.total}"
-                    )
+                    status.update(f"[ прогресс ] Завершено: {event.completed} из {event.total}")
                 elif isinstance(event, LogEvent):
                     status.update(f"[ лог ] {event.message}")
                 elif isinstance(event, ScanCompletedEvent):
-                    html_path = event.report_paths.get("html_direct") or event.report_paths.get("html")
-                    if html_path:
-                        short_path = str(html_path).replace(str(Path.home()), "~")
-                        status.update(f"[ готово ] HTML: {short_path}")
-                    else:
-                        report_count = len(event.report_paths)
-                        status.update(
-                            f"[ готово ] Сессия {event.session_id}: сохранено отчетов: {report_count}"
-                        )
-                    save_button = self.query_one("#save_html_button", Button)
-                    save_button.display = True
+                    status.update(f"[ готово ] Сессия {event.session_id}: сохранено отчетов: {len(event.report_paths)}")
+                    save_btn.display = True
             except asyncio.TimeoutError:
                 continue
             except Exception:
@@ -256,15 +197,13 @@ class MainScreen(Screen[None]):
 
         try:
             self._last_session_result = await scan_task
-            save_button = self.query_one("#save_html_button", Button)
-            save_button.display = True
-        except Exception as exc:
-            status.update(f"[ сбой ] Ошибка сканирования: {exc}")
+            save_btn.display = True
+        except Exception as err:
+            status.update(f"[ сбой ] Ошибка сканирования: {err}")
         finally:
             self._is_scanning = False
 
     async def action_save_html(self) -> None:
-        # Экспорт HTML-отчета по запросу пользователя, вывод пути и автооткрытие
         status = self.query_one("#status_message", Static)
         if self._last_session_result is None:
             status.update("[ ошибка ] Нет данных предыдущего сканирования")
@@ -272,10 +211,7 @@ class MainScreen(Screen[None]):
 
         status.update("[ ожидание ] Формирование HTML-отчета...")
         try:
-            report_path = await self.engine.dispatcher.export_html(
-                self._last_session_result
-            )
-            short_path = str(report_path).replace(str(Path.home()), "~")
-            status.update(f"[ HTML создан ] {short_path}")
-        except Exception as exc:
-            status.update(f"[ сбой ] Ошибка создания HTML: {exc}")
+            report_path = await self.engine.dispatcher.export_html(self._last_session_result)
+            status.update(f"[ HTML создан ] file://{report_path.resolve()}")
+        except Exception as err:
+            status.update(f"[ сбой ] Ошибка создания HTML: {err}")

@@ -1,4 +1,3 @@
-# Модуль интеграции инструмента Maigret для асинхронного поиска профилей по никнейму
 from __future__ import annotations
 
 import asyncio
@@ -34,84 +33,60 @@ except (ImportError, RuntimeError):
 
 
 class MaigretExecutor:
-    # Асинхронный координатор поиска по никнеймам на базе Maigret и ScanEngine
-
     def __init__(
         self,
         event_queue: Optional[asyncio.Queue[Any]] = None,
         engine: Optional[ScanEngine] = None,
         dispatcher: Optional[ReportDispatcher] = None,
     ) -> None:
-        self.event_queue: asyncio.Queue[Any] = event_queue or asyncio.Queue()
+        self.event_queue = event_queue or asyncio.Queue()
         self.dispatcher = dispatcher or ReportDispatcher()
         if engine is None:
             from epitaph.core.engine import ScanEngine
-            self.engine = ScanEngine(
-                event_queue=self.event_queue, dispatcher=self.dispatcher
-            )
+            self.engine = ScanEngine(event_queue=self.event_queue, dispatcher=self.dispatcher)
         else:
             self.engine = engine
 
     async def run_search(
-        self,
-        target: TargetProfile,
-        output_dir: Optional[Path] = None,
+        self, target: TargetProfile, output_dir: Optional[Path] = None
     ) -> ScanSessionResult:
-        # Запуск асинхронного поиска по никнейму с потоковой отправкой событий
         session_id = uuid.uuid4().hex[:8]
         start_time = datetime.now(timezone.utc)
-        await self.event_queue.put(
-            StartScanEvent(target=target, session_id=session_id)
-        )
+        await self.event_queue.put(StartScanEvent(target=target, session_id=session_id))
 
         if HAS_MAIGRET and maigret is not None:
             try:
-                return await self._run_native_maigret(
-                    target, session_id, start_time, output_dir
-                )
-            except Exception as exc:
-                logger.warning(
-                    "Сбой нативного поиска Maigret: %s. Переключение на ScanEngine.", exc
-                )
+                return await self._run_native(target, session_id, start_time, output_dir)
+            except Exception as err:
+                logger.warning("Сбой нативного поиска Maigret: %s. Переключение на ScanEngine.", err)
                 await self.event_queue.put(
-                    LogEvent(
-                        message=f"Ошибка Maigret: {exc}. Переключение на встроенный движок.",
-                        level="WARNING",
-                    )
+                    LogEvent(message=f"Ошибка Maigret: {err}. Переключение на встроенный движок.", level="WARNING")
                 )
 
-        # Выполнение сканирования через встроенный асинхронный движок
         return await self.engine.run_scan(target, output_dir=output_dir)
 
-    async def _run_native_maigret(
+    async def _run_native(
         self,
         target: TargetProfile,
         session_id: str,
         start_time: datetime,
         output_dir: Optional[Path],
     ) -> ScanSessionResult:
-        # Выполнение поиска средствами библиотеки Maigret в изолированном пуле
-        await self.event_queue.put(
-            LogEvent(message=f"Запуск Maigret сканирования для {target.username}.")
-        )
+        await self.event_queue.put(LogEvent(message=f"Запуск Maigret сканирования для {target.username}."))
 
-        def _execute_sync_search() -> List[Dict[str, Any]]:
-            if hasattr(maigret, "search"):
-                raw_results = maigret.search(username=target.username)
-                return list(raw_results) if raw_results else []
-            return []
+        def _search() -> List[Dict[str, Any]]:
+            return list(maigret.search(username=target.username)) if hasattr(maigret, "search") else []
 
-        raw_items = await asyncio.to_thread(_execute_sync_search)
+        raw_items = await asyncio.to_thread(_search)
         results: List[CheckResult] = []
         total = max(len(raw_items), 1)
 
         for idx, item in enumerate(raw_items, start=1):
-            status_str = str(item.get("status", "FOUND")).upper()
-            status = DetectionStatus.FOUND if "FOUND" in status_str else DetectionStatus.NOT_FOUND
+            is_found = "FOUND" in str(item.get("status", "FOUND")).upper()
             res = CheckResult(
                 platform_name=str(item.get("site_name", "Unknown")),
                 target=target,
-                status=status,
+                status=DetectionStatus.FOUND if is_found else DetectionStatus.NOT_FOUND,
                 profile_url=item.get("url_user"),
                 response_time_ms=float(item.get("response_time", 0.0) or 0.0),
                 execution_type=ExecutionType.HTTP,
@@ -119,29 +94,18 @@ class MaigretExecutor:
             )
             results.append(res)
             await self.event_queue.put(CheckResultEvent(result=res))
-            await self.event_queue.put(
-                ProgressUpdateEvent(completed=idx, total=total)
-            )
+            await self.event_queue.put(ProgressUpdateEvent(completed=idx, total=total))
 
-        end_time = datetime.now(timezone.utc)
         session_result = ScanSessionResult(
             session_id=session_id,
             target=target,
             start_time=start_time,
-            end_time=end_time,
+            end_time=datetime.now(timezone.utc),
             results=results,
         )
 
-        target_out_dir = output_dir or get_default_report_dir(
-            session_id, target.username
-        )
-        generated_reports = await self.dispatcher.export_all(
-            session_result, target_out_dir
-        )
-        await self.event_queue.put(
-            ScanCompletedEvent(
-                session_id=session_id, report_paths=generated_reports
-            )
-        )
+        target_out = output_dir or get_default_report_dir(session_id, target.username)
+        reports = await self.dispatcher.export_all(session_result, target_out)
+        await self.event_queue.put(ScanCompletedEvent(session_id=session_id, report_paths=reports))
 
         return session_result

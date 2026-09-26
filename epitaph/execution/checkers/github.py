@@ -28,10 +28,22 @@ class GitHubChecker(BasePlatformChecker):
 
     @property
     def headers(self) -> Dict[str, str]:
-        # Пользовательские HTTP-заголовки
+        # Пользовательские HTTP-заголовки с реалистичной маскировкой под браузер
         return {
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9,ru;q=0.8,uk;q=0.7",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+            ),
+            "Sec-Ch-Ua": '"Chromium";v="126", "Not/A)Brand";v="8"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Upgrade-Insecure-Requests": "1",
         }
 
     async def check_browser(self, target: TargetProfile, context: Any) -> CheckResult:
@@ -53,7 +65,7 @@ class GitHubChecker(BasePlatformChecker):
         url = f"https://github.com/{target.username}"
         start_time = time.perf_counter()
         try:
-            response = await client.get(url, headers=self.headers, follow_redirects=False)
+            response = await client.get(url, headers=self.headers, follow_redirects=True)
             elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
             if response.status_code == 200:

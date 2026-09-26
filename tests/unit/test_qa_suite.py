@@ -47,15 +47,38 @@ async def test_github_checker_unsupported_browser_execution() -> None:
 
 
 @pytest.mark.asyncio
-async def test_steam_checker_unsupported_http_execution() -> None:
-    # Проверка возврата статуса BLOCKED при вызове HTTP-метода для браузерного чекера
+async def test_steam_checker_http_execution_found() -> None:
+    # Проверка детекции существующего профиля Steam через HTTP-клиент
     checker = SteamChecker()
     target = TargetProfile(username="gaben")
 
-    result = await checker.check_http(target, None)
+    mock_client = AsyncMock()
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = '<html><span class="actual_persona_name">GabeN</span></html>'
+    mock_client.get.return_value = mock_response
+
+    result = await checker.check_http(target, mock_client)
     assert isinstance(result, CheckResult)
-    assert result.status == DetectionStatus.BLOCKED
-    assert result.error_message is not None
+    assert result.status == DetectionStatus.FOUND
+    assert result.profile_url == "https://steamcommunity.com/id/gaben"
+
+
+@pytest.mark.asyncio
+async def test_steam_checker_http_execution_not_found() -> None:
+    # Проверка детекции отсутствующего профиля Steam через HTTP-клиент
+    checker = SteamChecker()
+    target = TargetProfile(username="non_existent_123456789")
+
+    mock_client = AsyncMock()
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = '<html><div class="error_ctn">The specified profile could not be found.</div></html>'
+    mock_client.get.return_value = mock_response
+
+    result = await checker.check_http(target, mock_client)
+    assert isinstance(result, CheckResult)
+    assert result.status == DetectionStatus.NOT_FOUND
 
 
 @pytest.mark.asyncio

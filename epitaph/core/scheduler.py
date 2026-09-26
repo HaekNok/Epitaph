@@ -1,6 +1,6 @@
-# Планировщик выполнения чекеров с поддержкой HTTP и браузерного пула
 import asyncio
 from typing import Optional
+
 from epitaph.core.limiter import DomainRateLimiter
 from epitaph.execution.base import BasePlatformChecker
 from epitaph.models.base import DetectionStatus, ExecutionType
@@ -12,8 +12,6 @@ from epitaph.network.proxy_manager import ProxyManager
 
 
 class TaskScheduler:
-    # Планировщик задач с раздельным распределением HTTP и браузерных проверок
-
     def __init__(
         self,
         max_concurrent_workers: int = 50,
@@ -30,7 +28,6 @@ class TaskScheduler:
 
     @property
     def browser_pool(self) -> PlaywrightBrowserPool:
-        # Ленивая инициализация пула браузеров только при прямом обращении
         if self._browser_pool is None:
             self._browser_pool = PlaywrightBrowserPool()
         return self._browser_pool
@@ -41,13 +38,8 @@ class TaskScheduler:
         target: TargetProfile,
         result_queue: Optional[asyncio.Queue[CheckResult]] = None,
     ) -> CheckResult:
-        # Выполнение проверки платформы с контролем параллелизма и задержек
         async with self.semaphore:
-            proxy = (
-                await self.proxy_manager.lease_proxy()
-                if self.proxy_manager
-                else None
-            )
+            proxy = await self.proxy_manager.lease_proxy() if self.proxy_manager else None
             raw_domain = getattr(checker, "domain", None)
             domain = self.rate_limiter.extract_domain(raw_domain or checker.name)
             await self.rate_limiter.acquire(domain, checker.rate_limit_delay)
@@ -64,11 +56,9 @@ class TaskScheduler:
                         await context.close()
 
                 if self.proxy_manager and proxy:
-                    await self.proxy_manager.report_success(
-                        proxy, result.response_time_ms
-                    )
+                    await self.proxy_manager.report_success(proxy, result.response_time_ms)
 
-            except Exception as exc:
+            except Exception as err:
                 if self.proxy_manager and proxy:
                     await self.proxy_manager.report_failure(proxy)
                 result = CheckResult(
@@ -77,7 +67,7 @@ class TaskScheduler:
                     status=DetectionStatus.ERROR,
                     response_time_ms=0.0,
                     execution_type=checker.execution_type,
-                    error_message=str(exc),
+                    error_message=str(err),
                 )
 
             if result_queue is not None:
