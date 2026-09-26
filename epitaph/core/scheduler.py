@@ -16,7 +16,7 @@ class TaskScheduler:
 
     def __init__(
         self,
-        max_concurrent_workers: int = 10,
+        max_concurrent_workers: int = 50,
         rate_limiter: Optional[DomainRateLimiter] = None,
         proxy_manager: Optional[ProxyManager] = None,
         http_client: Optional[HttpClientManager] = None,
@@ -43,8 +43,13 @@ class TaskScheduler:
     ) -> CheckResult:
         # Выполнение проверки платформы с контролем параллелизма и задержек
         async with self.semaphore:
-            proxy = await self.proxy_manager.lease_proxy() if self.proxy_manager else None
-            domain = self.rate_limiter.extract_domain(checker.name)
+            proxy = (
+                await self.proxy_manager.lease_proxy()
+                if self.proxy_manager
+                else None
+            )
+            raw_domain = getattr(checker, "domain", None)
+            domain = self.rate_limiter.extract_domain(raw_domain or checker.name)
             await self.rate_limiter.acquire(domain, checker.rate_limit_delay)
 
             try:
@@ -59,7 +64,9 @@ class TaskScheduler:
                         await context.close()
 
                 if self.proxy_manager and proxy:
-                    await self.proxy_manager.report_success(proxy, result.response_time_ms)
+                    await self.proxy_manager.report_success(
+                        proxy, result.response_time_ms
+                    )
 
             except Exception as exc:
                 if self.proxy_manager and proxy:

@@ -1,6 +1,7 @@
 from epitaph.models.base import DetectionStatus, ExecutionType, ProxyProtocol
 from epitaph.models.proxy import ProxyEntity
 from epitaph.models.result import CheckResult, ScanSessionResult
+from epitaph.models.site import CheckType, SiteDefinition
 from epitaph.models.target import TargetProfile
 
 __all__ = [
@@ -11,4 +12,6 @@ __all__ = [
     "TargetProfile",
     "CheckResult",
     "ScanSessionResult",
+    "CheckType",
+    "SiteDefinition",
 ]
