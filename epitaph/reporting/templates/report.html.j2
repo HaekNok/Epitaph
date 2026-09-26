@@ -2,26 +2,37 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Epitaph Report - {{ data.target.username }}</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f111a; color: #e6edf3; margin: 0; padding: 30px; }
-    .card { background: #161b22; border-radius: 8px; border: 1px solid #30363d; padding: 24px; margin-bottom: 24px; }
-    h1 { margin-top: 0; color: #58a6ff; }
-    .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 16px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f111a; color: #e6edf3; margin: 0; padding: 24px; }
+    .card { background: #161b22; border-radius: 8px; border: 1px solid #30363d; padding: 20px; margin-bottom: 20px; }
+    h1 { margin-top: 0; color: #58a6ff; font-size: 24px; }
+    h2 { margin-top: 0; color: #c9d1d9; font-size: 18px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 16px; }
     .meta-item { background: #21262d; padding: 12px; border-radius: 6px; }
-    .meta-label { font-size: 12px; color: #8b949e; text-transform: uppercase; }
-    .meta-value { font-size: 18px; font-weight: bold; margin-top: 4px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-    th, td { text-align: left; padding: 12px; border-bottom: 1px solid #30363d; }
+    .meta-label { font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
+    .meta-value { font-size: 16px; font-weight: bold; margin-top: 4px; word-break: break-word; }
+    .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 16px; }
+    table { width: 100%; border-collapse: collapse; min-width: 520px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #30363d; font-size: 14px; }
     th { background: #21262d; color: #c9d1d9; font-weight: 600; }
     tr:hover { background: #1f242c; }
-    .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+    .status-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
     .status-FOUND { background: #238636; color: #ffffff; }
     .status-NOT_FOUND { background: #30363d; color: #8b949e; }
     .status-ERROR, .status-BLOCKED { background: #da3633; color: #ffffff; }
     .status-RATE_LIMITED { background: #d29922; color: #ffffff; }
-    a { color: #58a6ff; text-decoration: none; }
+    a { color: #58a6ff; text-decoration: none; word-break: break-all; }
     a:hover { text-decoration: underline; }
+    @media (max-width: 600px) {
+      body { padding: 12px; }
+      .card { padding: 14px; margin-bottom: 14px; }
+      h1 { font-size: 20px; }
+      .meta-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+      .meta-item { padding: 8px 10px; }
+      th, td { padding: 8px 10px; font-size: 13px; }
+    }
   </style>
 </head>
 <body>
@@ -37,34 +48,36 @@
 
   <div class="card">
     <h2>Результаты проверок платформ</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Платформа</th>
-          <th>Тип</th>
-          <th>Статус</th>
-          <th>Задержка</th>
-          <th>Ссылка на профиль</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in data.results %}
-        <tr>
-          <td><strong>{{ r.platform_name }}</strong></td>
-          <td>{{ r.execution_type }}</td>
-          <td><span class="status-badge status-{{ r.status }}">{{ r.status }}</span></td>
-          <td>{{ "%.1f"|format(r.response_time_ms) }} ms</td>
-          <td>
-            {% if r.profile_url %}
-            <a href="{{ r.profile_url }}" target="_blank">{{ r.profile_url }}</a>
-            {% else %}
-            -
-            {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Платформа</th>
+            <th>Тип</th>
+            <th>Статус</th>
+            <th>Задержка</th>
+            <th>Ссылка на профиль</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in data.results %}
+          <tr>
+            <td><strong>{{ r.platform_name }}</strong></td>
+            <td>{{ r.execution_type }}</td>
+            <td><span class="status-badge status-{{ r.status }}">{{ r.status }}</span></td>
+            <td>{{ "%.1f"|format(r.response_time_ms) }} ms</td>
+            <td>
+              {% if r.profile_url %}
+              <a href="{{ r.profile_url }}" target="_blank">{{ r.profile_url }}</a>
+              {% else %}
+              -
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </body>
 </html>

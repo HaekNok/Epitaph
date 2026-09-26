@@ -6,7 +6,8 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${PROJECT_ROOT}/.venv"
 REQUIRED_PKGS=("python" "git" "clang" "binutils" "make" "libjpeg-turbo" "freetype" "libxml2" "libxslt" "rust")
 
-printf "[QA] Проверка окружения Termux (%s)\n" "$(uname -m)"
+printf "[QA] Проверка окружения Termux (%s)
+" "$(uname -m)"
 
 # Проверка и установка системных пакетов Termux
 MISSING_PKGS=()
@@ -17,16 +18,19 @@ for pkg in "${REQUIRED_PKGS[@]}"; do
 done
 
 if [ ${#MISSING_PKGS[@]} -gt 0 ]; then
-    printf "[QA] Установка недостающих пакетов через pkg: %s\n" "${MISSING_PKGS[*]}"
+    printf "[QA] Установка недостающих пакетов через pkg: %s
+" "${MISSING_PKGS[*]}"
     pkg update -y
     pkg install -y "${MISSING_PKGS[@]}"
 else
-    printf "[QA] Системные пакеты установлены.\n"
+    printf "[QA] Системные пакеты установлены.
+"
 fi
 
 # Создание изолированного виртуального окружения по стандарту PEP 668
 if [ ! -d "${VENV_DIR}" ]; then
-    printf "[QA] Создание venv: %s\n" "${VENV_DIR}"
+    printf "[QA] Создание venv: %s
+" "${VENV_DIR}"
     python -m venv "${VENV_DIR}"
 fi
 
@@ -38,15 +42,18 @@ export CARGO_BUILD_JOBS=2
 export RUSTFLAGS="-C lto=no"
 export CFLAGS="-Wno-error"
 
-printf "[QA] Обновление базовых утилит pip\n"
+printf "[QA] Обновление базовых утилит pip
+"
 pip install --upgrade pip setuptools wheel
 
 # Установка проекта в режиме редактирования без опционального Playwright
-printf "[QA] Установка Epitaph в режиме editable (pip install -e .)\n"
+printf "[QA] Установка Epitaph в режиме editable (pip install -e .)
+"
 pip install -e "${PROJECT_ROOT}"
 
 # Верификация импорта всех ключевых модулей пакета
-printf "[QA] Проверка импортов модулей\n"
+printf "[QA] Проверка импортов модулей
+"
 python -c "
 import sys
 modules = [
@@ -83,16 +90,20 @@ if failed:
 "
 
 # Запуск юнит-тестов в headless-режиме без интерактивного TUI
-printf "[QA] Запуск юнит-тестов pytest\n"
+printf "[QA] Запуск юнит-тестов pytest
+"
 if pip show pytest >/dev/null 2>&1; then
     pytest "${PROJECT_ROOT}/tests/unit" -v -m "not browser"
 else
-    printf "[QA] Пакет pytest не установлен в базовом окружении, шаг пропущен.\n"
+    printf "[QA] Пакет pytest не установлен в базовом окружении, шаг пропущен.
+"
 fi
 
 # Проверка обработки CLI-флагов без аварийного падения
-printf "[QA] Проверка CLI точек входа\n"
+printf "[QA] Проверка CLI точек входа
+"
 python -m epitaph --help >/dev/null
 epitaph --version
 
-printf "[QA] Дымовое тестирование в среде Termux успешно завершено.\n"
+printf "[QA] Дымовое тестирование в среде Termux успешно завершено.
+"

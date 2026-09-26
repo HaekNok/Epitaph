@@ -1,9 +1,9 @@
-# Движок оркестрации сессии сканирования целевого профиля
+# Движок координации сессий сканирования и генерации отчетов
 import asyncio
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List, Optional
+import uuid
 from epitaph.core.events import CheckResultEvent, ProgressUpdateEvent, ScanCompletedEvent
 from epitaph.core.scheduler import TaskScheduler
 from epitaph.execution.base import BasePlatformChecker
@@ -14,7 +14,7 @@ from epitaph.reporting.dispatcher import ReportDispatcher, get_default_report_di
 
 
 class ScanEngine:
-    # Координатор параллельного выполнения чекеров и публикации событий
+    # Главный координатор выполнения асинхронной сессии поиска
 
     def __init__(
         self,
@@ -27,9 +27,11 @@ class ScanEngine:
         self.event_queue: asyncio.Queue[Any] = event_queue or asyncio.Queue()
 
     async def run_scan(
-        self, target: TargetProfile, output_dir: Optional[Path] = None
+        self,
+        target: TargetProfile,
+        output_dir: Optional[Path] = None,
     ) -> ScanSessionResult:
-        # Запуск и координация полного цикла сканирования по всем чекерам
+        # Запуск параллельного выполнения чекеров с оповещением через очереди
         session_id = uuid.uuid4().hex[:8]
         start_time = datetime.now(timezone.utc)
         checkers = CheckerRegistry.get_all_checkers()
@@ -38,7 +40,7 @@ class ScanEngine:
         results: List[CheckResult] = []
 
         async def worker(checker: BasePlatformChecker) -> None:
-            # Вызов чекера и публикация событий результата и прогресса
+            # Обработка отдельной платформы с фиксацией промежуточного прогресса
             res = await self.scheduler.run_checker(checker, target)
             results.append(res)
             await self.event_queue.put(CheckResultEvent(result=res))
@@ -59,16 +61,10 @@ class ScanEngine:
             results=results,
         )
 
-        target_out_dir = output_dir or get_default_report_dir(
-            session_id, target.username
-        )
-        generated_reports = await self.dispatcher.export_all(
-            session_result, target_out_dir
-        )
+        out_path = output_dir or get_default_report_dir(session_id, target.username)
+        generated_reports = await self.dispatcher.export_all(session_result, out_path)
         await self.event_queue.put(
-            ScanCompletedEvent(
-                session_id=session_id, report_paths=generated_reports
-            )
+            ScanCompletedEvent(session_id=session_id, report_paths=generated_reports)
         )
 
         return session_result

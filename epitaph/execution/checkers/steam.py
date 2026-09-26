@@ -1,4 +1,4 @@
-# Модуль проверки существования аккаунта Steam Community через рендеринг DOM
+# Чекер профиля Steam с безопасным импортом Playwright и контрактом BasePlatformChecker
 import time
 from typing import Any, Dict
 from epitaph.execution.base import BasePlatformChecker
@@ -8,10 +8,7 @@ from epitaph.models.result import CheckResult
 from epitaph.models.target import TargetProfile
 
 try:
-    from playwright.async_api import (
-        BrowserContext,
-        TimeoutError as PlaywrightTimeoutError,
-    )
+    from playwright.async_api import BrowserContext, TimeoutError as PlaywrightTimeoutError
 
     HAS_PLAYWRIGHT = True
 except (ImportError, RuntimeError):
@@ -22,7 +19,7 @@ except (ImportError, RuntimeError):
 
 @register_checker
 class SteamChecker(BasePlatformChecker):
-    # Чекер платформы Steam с поддержкой работы при недоступном Playwright
+    # Модуль проверки существования аккаунта Steam Community
 
     @property
     def name(self) -> str:
@@ -34,18 +31,21 @@ class SteamChecker(BasePlatformChecker):
 
     @property
     def rate_limit_delay(self) -> float:
+        # Задержка между запросами к Steam Community
         return 1.0
 
     async def check_http(
-        self, target: TargetProfile, client: Any
+        self,
+        target: TargetProfile,
+        client: Any,
     ) -> CheckResult:
-        # HTTP-проверка не поддерживается целевой платформой Steam
+        # Возврат детерминированного результата при вызове HTTP вместо выброса исключения
         return CheckResult(
             platform_name=self.name,
             target=target,
             status=DetectionStatus.BLOCKED,
             execution_type=self.execution_type,
-            error_message="Проверка Steam требует браузерного рендеринга.",
+            error_message="Steam Community требует браузерного рендеринга для верификации.",
         )
 
     async def check_browser(
@@ -53,14 +53,14 @@ class SteamChecker(BasePlatformChecker):
         target: TargetProfile,
         context: BrowserContext,
     ) -> CheckResult:
-        # Проверка профиля в браузере с валидацией наличия Playwright
+        # Проверка профиля через браузерный контекст с валидацией среды
         if not HAS_PLAYWRIGHT:
             return CheckResult(
                 platform_name=self.name,
                 target=target,
                 status=DetectionStatus.BLOCKED,
                 execution_type=self.execution_type,
-                error_message="Playwright недоступен в данном окружении.",
+                error_message="Playwright недоступен в текущем окружении.",
             )
 
         url = f"https://steamcommunity.com/id/{target.username}"
