@@ -19,7 +19,7 @@ class MenuSlot(Static):
         self.slot_number = slot_number
         self.title = title
         if title:
-            formatted_label = f"{slot_number}. {title}"
+            formatted_label = f"{slot_number:>2} > {title}"
         else:
             formatted_label = f"{slot_number:>2} > SOON"
         super().__init__(formatted_label, classes="menu_slot")

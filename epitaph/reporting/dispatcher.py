@@ -51,3 +51,20 @@ class ReportDispatcher:
                 tg.create_task(_run_export(exp))
 
         return results
+
+    async def export_html(
+        self,
+        data: ScanSessionResult,
+        output_path: Optional[Path] = None,
+    ) -> Path:
+        # Экспорт отдельного HTML-отчета с изоляцией рендеринга в пуле потоков
+        if output_path is None:
+            target_dir = get_default_report_dir(data.session_id, data.target.username)
+            target_dir.mkdir(parents=True, exist_ok=True)
+            target_file = target_dir / "report.html"
+        else:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            target_file = output_path
+
+        html_exporter = HtmlReportExporter()
+        return await html_exporter.export(data, target_file)

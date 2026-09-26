@@ -16,6 +16,7 @@ from epitaph.core.events import (
     ScanCompletedEvent,
 )
 from epitaph.execution.maigret import MaigretExecutor
+from epitaph.models.result import ScanSessionResult
 from epitaph.models.target import TargetProfile
 from epitaph.ui.widgets.banner import HeaderBanner
 from epitaph.ui.widgets.menu_slot import MenuSlot
@@ -28,8 +29,10 @@ class MainScreen(Screen[None]):
         super().__init__()
         self.event_queue: asyncio.Queue[Any] = asyncio.Queue()
         self.maigret_executor = MaigretExecutor(event_queue=self.event_queue)
-        self._is_scanning = False
+        self.engine = self.maigret_executor.engine
+        self._is_scanning: bool = False
         self._selected_slot: Optional[int] = None
+        self._last_session_result: Optional[ScanSessionResult] = None
 
     def compose(self) -> ComposeResult:
         # Компоновка интерфейсных блоков главного экрана
@@ -53,8 +56,10 @@ class MainScreen(Screen[None]):
             with Vertical(id="footer_panel"):
                 with Horizontal(id="action_bar"):
                     yield Button("> клавиатура", id="keyboard_button")
-                    yield Static(id="action_spacer")
-                    yield Button("[q] > выход", id="exit_button")
+                    yield Static(id="action_spacer_left")
+                    yield Button("> сохранить HTML", id="save_html_button")
+                    yield Static(id="action_spacer_right")
+                    yield Button("> выход", id="exit_button")
                 yield Static(
                     "[ ожидание ] Выберите слот касанием или введите номер модуля",
                     id="status_message",
@@ -67,8 +72,10 @@ class MainScreen(Screen[None]):
                     )
 
     def on_mount(self) -> None:
-        # Установка адаптивной геометрии при первоначальном монтировании экрана
+        # Установка адаптивной геометрии и начального состояния кнопок
         self._apply_responsive_layout(self.size.width)
+        save_btn = self.query_one("#save_html_button", Button)
+        save_btn.display = False
 
     def on_resize(self, event: Resize) -> None:
         # Реакция на изменение размеров терминала в рантайме
@@ -89,6 +96,8 @@ class MainScreen(Screen[None]):
         # Обработка нажатий на функциональные кнопки нижней панели
         if event.button.id == "keyboard_button":
             self.action_request_keyboard()
+        elif event.button.id == "save_html_button":
+            asyncio.create_task(self.action_save_html())
         elif event.button.id == "exit_button":
             self.app.exit()
 
@@ -180,6 +189,10 @@ class MainScreen(Screen[None]):
             status.update("[ ошибка ] Сканирование уже выполняется...")
             return
 
+        # Немедленное обновление статуса обработки запроса
+        status = self.query_one("#status_message", Static)
+        status.update("[ ожидание ] Запрос обрабатывается")
+
         # Запуск сканирования для активного слота поиска
         target = TargetProfile(username=raw_val)
         asyncio.create_task(self._execute_scan(target))
@@ -188,7 +201,10 @@ class MainScreen(Screen[None]):
         # Асинхронное выполнение сканирования Maigret без блокировки интерфейса
         self._is_scanning = True
         status = self.query_one("#status_message", Static)
-        status.update(f"[ старт ] Поиск профиля: {target.username}...")
+
+        # Скрываем кнопку сохранения перед началом новой сессии
+        save_btn = self.query_one("#save_html_button", Button)
+        save_btn.display = False
 
         scan_task = asyncio.create_task(self.maigret_executor.run_search(target))
 
@@ -212,14 +228,35 @@ class MainScreen(Screen[None]):
                     status.update(
                         f"[ готово ] Сессия {event.session_id}: сохранено отчетов: {report_count}"
                     )
+                    save_button = self.query_one("#save_html_button", Button)
+                    save_button.display = True
             except asyncio.TimeoutError:
                 continue
             except Exception:
                 break
 
         try:
-            await scan_task
+            self._last_session_result = await scan_task
+            save_button = self.query_one("#save_html_button", Button)
+            save_button.display = True
         except Exception as exc:
             status.update(f"[ сбой ] Ошибка сканирования: {exc}")
         finally:
             self._is_scanning = False
+
+    async def action_save_html(self) -> None:
+        # Экспорт HTML-отчета по запросу пользователя и отображение ссылки
+        status = self.query_one("#status_message", Static)
+        if self._last_session_result is None:
+            status.update("[ ошибка ] Нет данных предыдущего сканирования")
+            return
+
+        status.update("[ ожидание ] Формирование HTML-отчета...")
+        try:
+            report_path = await self.engine.dispatcher.export_html(
+                self._last_session_result
+            )
+            url_link = report_path.as_uri()
+            status.update(f"[ HTML создан ] {url_link}")
+        except Exception as exc:
+            status.update(f"[ сбой ] Ошибка создания HTML: {exc}")
