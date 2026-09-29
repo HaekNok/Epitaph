@@ -67,8 +67,10 @@
             <td><span class="status-badge status-{{ r.status }}">{{ r.status }}</span></td>
             <td>{{ "%.1f"|format(r.response_time_ms) }} ms</td>
             <td>
-              {% if r.profile_url %}
-              <a href="{{ r.profile_url }}" target="_blank">{{ r.profile_url }}</a>
+              {% if r.profile_url and (r.profile_url.startswith('https://') or r.profile_url.startswith('http://')) %}
+              <a href="{{ r.profile_url }}" target="_blank" rel="noopener noreferrer">{{ r.profile_url }}</a>
+              {% elif r.profile_url %}
+              <span>{{ r.profile_url }}</span>
               {% else %}
               -
               {% endif %}

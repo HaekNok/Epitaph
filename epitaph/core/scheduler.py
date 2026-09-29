@@ -39,7 +39,23 @@ class TaskScheduler:
         result_queue: Optional[asyncio.Queue[CheckResult]] = None,
     ) -> CheckResult:
         async with self.semaphore:
-            proxy = await self.proxy_manager.lease_proxy() if self.proxy_manager else None
+            proxy = None
+            if self.proxy_manager is not None:
+                proxy = await self.proxy_manager.lease_proxy()
+                if proxy is None:
+                    # Принцип Fail-Closed: запрет неявного перехода на прямое подключение при истощении прокси
+                    result = CheckResult(
+                        platform_name=checker.name,
+                        target=target,
+                        status=DetectionStatus.ERROR,
+                        response_time_ms=0.0,
+                        execution_type=checker.execution_type,
+                        error_message="Fail-Closed: All proxies in pool are unavailable or in cooldown",
+                    )
+                    if result_queue is not None:
+                        await result_queue.put(result)
+                    return result
+
             raw_domain = getattr(checker, "domain", None)
             domain = self.rate_limiter.extract_domain(raw_domain or checker.name)
             await self.rate_limiter.acquire(domain, checker.rate_limit_delay)

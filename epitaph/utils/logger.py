@@ -1,7 +1,28 @@
 import logging
-import sys
 from pathlib import Path
+import re
+import sys
 from typing import Optional
+
+SENSITIVE_PATTERNS = [
+    (re.compile(r"://([^:/\s]+):([^@\s]+)@"), r"://\1:***@"),
+    (re.compile(r"(password|token|secret|key|api_key)=([^&\s]+)", re.IGNORECASE), r"\1=***"),
+    (re.compile(r'("password"|\'password\')\s*:\s*("|\')[^"\']+("|\')', re.IGNORECASE), r'\1: "***"'),
+]
+
+
+def sanitize_log_message(msg: str) -> str:
+    # Санитизация сообщений логов для защиты от утечек учетных данных
+    for pattern, repl in SENSITIVE_PATTERNS:
+        msg = pattern.sub(repl, msg)
+    return msg
+
+
+class SanitizingFormatter(logging.Formatter):
+    # Форматтер с фильтрацией учетных данных прокси и токенов
+    def format(self, record: logging.LogRecord) -> str:
+        record.msg = sanitize_log_message(str(record.msg))
+        return super().format(record)
 
 
 def setup_logger(
@@ -13,7 +34,7 @@ def setup_logger(
     logger.setLevel(level)
 
     if not logger.handlers:
-        formatter = logging.Formatter(
+        formatter = SanitizingFormatter(
             fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )

@@ -1,4 +1,5 @@
 import asyncio
+import time
 from collections import deque
 from typing import Deque, List, Optional
 import httpx
@@ -18,6 +19,20 @@ class ProxyManager:
         self.circuit_breaker = circuit_breaker or CircuitBreaker()
         self.health_check_url = health_check_url
         self._lock = asyncio.Lock()
+
+    async def verify_egress_ip(self, proxy: ProxyEntity) -> Optional[str]:
+        # Pre-flight проверка фактического egress IP через защищенный HTTPS-запрос
+        try:
+            async with httpx.AsyncClient(proxy=proxy.url, timeout=7.0, trust_env=False) as client:
+                res = await client.get(self.health_check_url)
+                if res.status_code == 200:
+                    for line in res.text.splitlines():
+                        if line.startswith("ip="):
+                            return line.split("=", 1)[1].strip()
+                    return res.text.strip()
+        except Exception:
+            return None
+        return None
 
     async def lease_proxy(self) -> Optional[ProxyEntity]:
         async with self._lock:
@@ -80,9 +95,5 @@ class ProxyManager:
                 self.active_proxies.extend(recovered)
 
     async def _check_node_health(self, proxy: ProxyEntity) -> bool:
-        try:
-            async with httpx.AsyncClient(proxy=proxy.url, timeout=5.0) as client:
-                res = await client.get(self.health_check_url)
-                return res.status_code == 200
-        except Exception:
-            return False
+        egress_ip = await self.verify_egress_ip(proxy)
+        return egress_ip is not None

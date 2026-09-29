@@ -1,7 +1,7 @@
 import re
 import time
 from typing import Any, Dict, Optional
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 import httpx
 
 from epitaph.execution.base import BasePlatformChecker
@@ -36,6 +36,7 @@ class GenericPlatformChecker(BasePlatformChecker):
     def headers(self) -> Dict[str, str]:
         headers = {
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
             "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
         }
         headers.update(self.site.headers)
@@ -64,8 +65,10 @@ class GenericPlatformChecker(BasePlatformChecker):
                 execution_type=self.execution_type,
             )
 
-        probe_url = (self.site.url_probe or self.site.url).replace("{username}", target.username)
-        profile_url = self.site.url.replace("{username}", target.username)
+        # Санитизация никнейма для предотвращения SSRF и инъекций путей
+        safe_username = quote(target.username, safe="")
+        probe_url = (self.site.url_probe or self.site.url).replace("{username}", safe_username)
+        profile_url = self.site.url.replace("{username}", safe_username)
 
         start = time.perf_counter()
         try:

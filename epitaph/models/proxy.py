@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Optional
+from urllib.parse import quote
 from pydantic import BaseModel, ConfigDict, Field
 from epitaph.models.base import ProxyProtocol
 
@@ -19,5 +20,11 @@ class ProxyEntity(BaseModel):
 
     @property
     def url(self) -> str:
-        auth = f"{self.username}:{self.password}@" if self.username and self.password else ""
-        return f"{self.protocol}://{auth}{self.host}:{self.port}"
+        proto = "socks5h" if self.protocol == ProxyProtocol.SOCKS5 else self.protocol.value
+        if self.username and self.password:
+            auth = f"{quote(self.username, safe='')}:{quote(self.password, safe='')}@"
+        elif self.username:
+            auth = f"{quote(self.username, safe='')}@"
+        else:
+            auth = ""
+        return f"{proto}://{auth}{self.host}:{self.port}"

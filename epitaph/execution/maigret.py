@@ -54,7 +54,9 @@ class MaigretExecutor:
         start_time = datetime.now(timezone.utc)
         await self.event_queue.put(StartScanEvent(target=target, session_id=session_id))
 
-        if HAS_MAIGRET and maigret is not None:
+        # Изоляция трафика: запрет прямого вызова Maigret при сконфигурированном прокси-пуле
+        has_proxy = getattr(self.engine.scheduler, "proxy_manager", None) is not None
+        if HAS_MAIGRET and maigret is not None and not has_proxy:
             try:
                 return await self._run_native(target, session_id, start_time, output_dir)
             except Exception as err:
@@ -62,6 +64,10 @@ class MaigretExecutor:
                 await self.event_queue.put(
                     LogEvent(message=f"Ошибка Maigret: {err}. Переключение на встроенный движок.", level="WARNING")
                 )
+        elif has_proxy:
+            await self.event_queue.put(
+                LogEvent(message="Активен прокси-пул: вызов Maigret изолирован, задействован ScanEngine.", level="INFO")
+            )
 
         return await self.engine.run_scan(target, output_dir=output_dir)
 

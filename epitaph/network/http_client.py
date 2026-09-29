@@ -1,4 +1,4 @@
-# Менеджер пула асинхронных HTTP-клиентов с адаптивными таймаутами
+# Менеджер пула асинхронных HTTP-клиентов с защитой от утечек трафика
 from typing import Dict, Optional
 import httpx
 from epitaph.models.proxy import ProxyEntity
@@ -11,9 +11,10 @@ except ImportError:
 
 
 class HttpClientManager:
-    # Менеджер постоянных сессий httpx с поддержкой пулов и безопасного протокола
+    # Менеджер постоянных сессий httpx с поддержкой пулов и изоляцией окружения
 
-    def __init__(self) -> None:
+    def __init__(self, enforce_proxy: bool = False) -> None:
+        self.enforce_proxy = enforce_proxy
         self._clients: Dict[str, httpx.AsyncClient] = {}
         self.limits = httpx.Limits(
             max_keepalive_connections=20,
@@ -28,7 +29,10 @@ class HttpClientManager:
         )
 
     async def get_client(self, proxy: Optional[ProxyEntity] = None) -> httpx.AsyncClient:
-        # Получение клиента для конкретного прокси или прямого сетевого подключения
+        # Получение клиента для прокси с запретом незащищенного прямого подключения в строгом режиме
+        if self.enforce_proxy and proxy is None:
+            raise RuntimeError("Fail-Closed: Direct connection prohibited when enforce_proxy is enabled")
+
         key = proxy.url if proxy else "direct"
         if key not in self._clients or self._clients[key].is_closed:
             default_headers = {
@@ -36,14 +40,14 @@ class HttpClientManager:
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
                 ),
-                "Accept-Language": "en-US,en;q=0.9,ru;q=0.8,uk;q=0.7",
+                "Accept-Language": "en-US,en;q=0.9",
             }
             self._clients[key] = httpx.AsyncClient(
                 proxy=proxy.url if proxy else None,
                 limits=self.limits,
                 timeout=self.timeout,
                 http2=HAS_H2,
-                trust_env=True,
+                trust_env=False,
                 headers=default_headers,
             )
         return self._clients[key]
