@@ -25,7 +25,7 @@ class HeaderBanner(Widget):
         # Размещение ASCII-символов и разделительной подстроки
         yield Static(ASCII_BANNER_FULL, id="ascii_art")
         yield Static(
-            "─────────────────── [ MODULAR OSINT FRAMEWORK // CRIMSON NOIR ] ───────────────────",
+            "─────────────────── [ MODULAR OSINT FRAMEWORK // TGK: EpitaphFramework ] ───────────────────",
             id="banner_subtitle",
         )
 
@@ -41,12 +41,12 @@ class HeaderBanner(Widget):
                 ascii_widget.update(ASCII_BANNER_COMPACT)
 
             if width >= 80:
-                decor_len = max(2, (width - 46) // 2)
+                decor_len = max(2, (width - 56) // 2)
                 subtitle_widget.update(
-                    f"{'─' * decor_len} [ MODULAR OSINT FRAMEWORK // CRIMSON NOIR ] {'─' * decor_len}"
+                    f"{'─' * decor_len} [ MODULAR OSINT FRAMEWORK // TGK: EpitaphFramework ] {'─' * decor_len}"
                 )
-            elif width >= 50:
-                subtitle_widget.update("[ MODULAR OSINT FRAMEWORK // CRIMSON NOIR ]")
+            elif width >= 58:
+                subtitle_widget.update("[ MODULAR OSINT FRAMEWORK // TGK: EpitaphFramework ]")
             else:
                 subtitle_widget.update("[ EPITAPH OSINT ]")
         except Exception:
