@@ -15,7 +15,7 @@ from epitaph.core.events import (
     ProgressUpdateEvent,
     ScanCompletedEvent,
 )
-from epitaph.execution.checkers.google.executor import GoogleExecutor
+from epitaph.execution.checkers.email.executor import EmailReconExecutor
 from epitaph.execution.maigret import MaigretExecutor
 from epitaph.models.result import ScanSessionResult
 from epitaph.models.target import TargetProfile
@@ -34,7 +34,7 @@ class MainScreen(Screen[None]):
         self.event_queue: asyncio.Queue[Any] = asyncio.Queue()
         self.maigret_executor = MaigretExecutor(event_queue=self.event_queue)
         self.engine = self.maigret_executor.engine
-        self.google_executor = GoogleExecutor(
+        self.email_executor = EmailReconExecutor(
             event_queue=self.event_queue,
             engine=self.engine,
             dispatcher=self.engine.dispatcher,
@@ -100,7 +100,6 @@ class MainScreen(Screen[None]):
             self.app.exit()
 
     def action_request_keyboard(self) -> None:
-        # Временный сброс захвата мыши для принудительного вызова экранной клавиатуры Termux
         cmd_input = self.query_one("#command_input", Input)
         cmd_input.focus()
         cmd_input.cursor_position = len(cmd_input.value)
@@ -204,7 +203,7 @@ class MainScreen(Screen[None]):
         save_btn = self.query_one("#save_html_button", Button)
         save_btn.display = False
 
-        executor = self.google_executor if is_email else self.maigret_executor
+        executor = self.email_executor if is_email else self.maigret_executor
         scan_task = asyncio.create_task(executor.run_search(target))
 
         while not scan_task.done() or not self.event_queue.empty():
