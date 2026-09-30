@@ -241,7 +241,7 @@ class MainScreen(Screen[None]):
             status.update("[ ошибка ] Нет данных предыдущего сканирования")
             return
 
-        status.update("[ ожидание ] Формирование HTML-отчета...")
+        status.update("[ ожидание ] Экспорт HTML-отчета...")
         try:
             report_path = await self.engine.dispatcher.export_html(self._last_session_result)
             short_path = str(report_path).replace(str(Path.home()), "~")

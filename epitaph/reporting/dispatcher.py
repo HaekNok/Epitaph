@@ -1,10 +1,13 @@
+# Диспетчер параллельного экспорта отчетов с приватным хранилищем и поддержкой Downloads
+from __future__ import annotations
+
 import asyncio
 import os
+from pathlib import Path
 import shutil
 import tempfile
-import uuid
-from pathlib import Path
 from typing import Dict, List, Optional
+import uuid
 
 from epitaph.models.result import ScanSessionResult
 from epitaph.reporting.base import BaseReportExporter
@@ -19,8 +22,42 @@ def sanitize_filename(name: str) -> str:
     return cleaned or "target"
 
 
+def is_directory_writable(path: Path) -> bool:
+    test_file = None
+    try:
+        if not path.is_dir():
+            return False
+        test_file = path / f"epitaph_{uuid.uuid4().hex[:6]}.tmp"
+        test_file.touch(exist_ok=True)
+        return True
+    except OSError:
+        return False
+    finally:
+        if test_file:
+            try:
+                test_file.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def get_downloads_dir() -> Optional[Path]:
+    candidates: List[Path] = [
+        Path.home() / "storage" / "downloads",
+        Path.home() / "storage" / "shared" / "Download",
+        Path("/storage/emulated/0/Download"),
+        Path("/sdcard/Download"),
+        Path.home() / "Downloads",
+    ]
+    for candidate in candidates:
+        try:
+            if is_directory_writable(candidate):
+                return candidate
+        except OSError:
+            continue
+    return None
+
+
 def get_default_report_dir(session_id: str, username: str = "") -> Path:
-    # Защищенный приватный каталог отчетов с правами 0700 для предотвращения утечек в Termux
     folder_name = f"{sanitize_filename(username)}_{session_id}" if username else session_id
     base_dir = Path.home() / ".epitaph" / "reports"
     target = base_dir / folder_name
@@ -64,6 +101,17 @@ class ReportDispatcher:
             for exp in self.exporters:
                 tg.create_task(_run(exp))
 
+        # Дублирование HTML в публичный каталог Downloads
+        downloads = get_downloads_dir()
+        if downloads and "html" in results:
+            clean_user = sanitize_filename(data.target.username)
+            public_html = downloads / f"report_{clean_user}_{data.session_id}.html"
+            try:
+                await asyncio.to_thread(shutil.copyfile, results["html"], public_html)
+                results["html_direct"] = public_html
+            except OSError:
+                pass
+
         return results
 
     async def export_html(
@@ -71,13 +119,14 @@ class ReportDispatcher:
         data: ScanSessionResult,
         output_path: Optional[Path] = None,
     ) -> Path:
+        clean_user = sanitize_filename(data.target.username)
         if output_path is not None:
             output_path.parent.mkdir(parents=True, exist_ok=True)
             target_file = output_path
         else:
             target_dir = get_default_report_dir(data.session_id, data.target.username)
-            clean_user = sanitize_filename(data.target.username)
-            target_file = target_dir / f"report_{clean_user}_{data.session_id}.html"
+            # Внутри уникальной папки сессии сохраняем стандартное и компактное имя report.html
+            target_file = target_dir / "report.html"
 
         result_path = await HtmlReportExporter().export(data, target_file)
         try:
@@ -85,4 +134,22 @@ class ReportDispatcher:
         except OSError:
             pass
 
-        return result_path
+        downloads = get_downloads_dir()
+        target_open = result_path
+        if downloads:
+            public_file = downloads / f"report_{clean_user}_{data.session_id}.html"
+            try:
+                await asyncio.to_thread(shutil.copyfile, result_path, public_file)
+                target_open = public_file
+            except OSError:
+                pass
+
+        opener = shutil.which("termux-open") or shutil.which("xdg-open")
+        if opener:
+            try:
+                import subprocess
+                subprocess.Popen([opener, str(target_open)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception:
+                pass
+
+        return target_open
