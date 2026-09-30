@@ -1,3 +1,4 @@
+# Экран главного меню TUI-интерфейса Epitaph с поддержкой Maigret
 import asyncio
 from pathlib import Path
 import sys
@@ -100,7 +101,6 @@ class MainScreen(Screen[None]):
             self.app.exit()
 
     def action_request_keyboard(self) -> None:
-        # Временный сброс захвата мыши для принудительного вызова экранной клавиатуры Termux
         cmd_input = self.query_one("#command_input", Input)
         cmd_input.focus()
         cmd_input.cursor_position = len(cmd_input.value)
@@ -180,6 +180,15 @@ class MainScreen(Screen[None]):
             self._select_slot(int(raw))
             return
 
+        # Проверка текстовых команд сохранения и открытия отчета
+        if raw.lower() in ("html", "save", "open", "отчет", "сохранить"):
+            if self._last_session_result is not None:
+                asyncio.create_task(self.action_save_html())
+            else:
+                status = self.query_one("#status_message", Static)
+                status.update("[ ошибка ] Нет данных предыдущего сканирования")
+            return
+
         status = self.query_one("#status_message", Static)
         if self._is_scanning:
             status.update("[ ошибка ] Сканирование уже выполняется...")
@@ -209,7 +218,7 @@ class MainScreen(Screen[None]):
                 elif isinstance(event, LogEvent):
                     status.update(f"[ лог ] {event.message}")
                 elif isinstance(event, ScanCompletedEvent):
-                    status.update(f"[ готово ] Сессия {event.session_id}: сохранено отчетов: {len(event.report_paths)}")
+                    status.update(f"[ готово ] Сессия {event.session_id}: сформировано {len(event.report_paths)} формата отчетов")
                     save_btn.display = True
             except asyncio.TimeoutError:
                 continue
@@ -218,6 +227,8 @@ class MainScreen(Screen[None]):
 
         try:
             self._last_session_result = await scan_task
+            found = self._last_session_result.found_count
+            status.update(f"[ готово ] Сессия {self._last_session_result.session_id} | Найдено: {found} | 4 формата отчетов")
             save_btn.display = True
         except Exception as err:
             status.update(f"[ сбой ] Ошибка сканирования: {err}")
@@ -233,6 +244,7 @@ class MainScreen(Screen[None]):
         status.update("[ ожидание ] Формирование HTML-отчета...")
         try:
             report_path = await self.engine.dispatcher.export_html(self._last_session_result)
-            status.update(f"[ HTML создан ] file://{report_path.resolve()}")
+            short_path = str(report_path).replace(str(Path.home()), "~")
+            status.update(f"[ открыт ] {short_path}")
         except Exception as err:
             status.update(f"[ сбой ] Ошибка создания HTML: {err}")

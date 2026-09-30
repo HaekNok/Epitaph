@@ -1,8 +1,11 @@
+# Движок оркестрации сессии сканирования целевого профиля
+from __future__ import annotations
+
 import asyncio
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List, Optional
+import uuid
 
 from epitaph.core.events import CheckResultEvent, ProgressUpdateEvent, ScanCompletedEvent
 from epitaph.core.scheduler import TaskScheduler
@@ -29,10 +32,15 @@ class ScanEngine:
         target: TargetProfile,
         output_dir: Optional[Path] = None,
         checkers: Optional[List[BasePlatformChecker]] = None,
+        session_id: Optional[str] = None,
     ) -> ScanSessionResult:
-        session_id = uuid.uuid4().hex[:8]
+        sid = session_id or uuid.uuid4().hex[:8]
         start_time = datetime.now(timezone.utc)
-        active_checkers = checkers if checkers is not None else CheckerRegistry.get_all_checkers()
+        active_checkers = (
+            checkers
+            if checkers is not None
+            else CheckerRegistry.get_all_checkers()
+        )
         total_checkers = len(active_checkers)
         results: List[CheckResult] = []
 
@@ -48,16 +56,19 @@ class ScanEngine:
             for ch in active_checkers:
                 tg.create_task(worker(ch))
 
+        end_time = datetime.now(timezone.utc)
         session_result = ScanSessionResult(
-            session_id=session_id,
+            session_id=sid,
             target=target,
             start_time=start_time,
-            end_time=datetime.now(timezone.utc),
+            end_time=end_time,
             results=results,
         )
 
-        target_out = output_dir or get_default_report_dir(session_id, target.username)
+        target_out = output_dir or get_default_report_dir(sid, target.username)
         reports = await self.dispatcher.export_all(session_result, target_out)
-        await self.event_queue.put(ScanCompletedEvent(session_id=session_id, report_paths=reports))
+        await self.event_queue.put(
+            ScanCompletedEvent(session_id=sid, report_paths=reports)
+        )
 
         return session_result

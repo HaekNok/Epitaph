@@ -1,3 +1,4 @@
+# Модуль интеграции инструмента Maigret для асинхронного поиска профилей по никнейму
 from __future__ import annotations
 
 import asyncio
@@ -39,7 +40,7 @@ class MaigretExecutor:
         engine: Optional[ScanEngine] = None,
         dispatcher: Optional[ReportDispatcher] = None,
     ) -> None:
-        self.event_queue = event_queue or asyncio.Queue()
+        self.event_queue: asyncio.Queue[Any] = event_queue or asyncio.Queue()
         self.dispatcher = dispatcher or ReportDispatcher()
         if engine is None:
             from epitaph.core.engine import ScanEngine
@@ -48,30 +49,26 @@ class MaigretExecutor:
             self.engine = engine
 
     async def run_search(
-        self, target: TargetProfile, output_dir: Optional[Path] = None
+        self,
+        target: TargetProfile,
+        output_dir: Optional[Path] = None,
     ) -> ScanSessionResult:
         session_id = uuid.uuid4().hex[:8]
         start_time = datetime.now(timezone.utc)
         await self.event_queue.put(StartScanEvent(target=target, session_id=session_id))
 
-        # Изоляция трафика: запрет прямого вызова Maigret при сконфигурированном прокси-пуле
-        has_proxy = getattr(self.engine.scheduler, "proxy_manager", None) is not None
-        if HAS_MAIGRET and maigret is not None and not has_proxy:
+        if HAS_MAIGRET and maigret is not None:
             try:
-                return await self._run_native(target, session_id, start_time, output_dir)
-            except Exception as err:
-                logger.warning("Сбой нативного поиска Maigret: %s. Переключение на ScanEngine.", err)
+                return await self._run_native_maigret(target, session_id, start_time, output_dir)
+            except Exception as exc:
+                logger.warning("Сбой нативного поиска Maigret: %s. Переключение на ScanEngine.", exc)
                 await self.event_queue.put(
-                    LogEvent(message=f"Ошибка Maigret: {err}. Переключение на встроенный движок.", level="WARNING")
+                    LogEvent(message=f"Ошибка Maigret: {exc}. Переключение на встроенный движок.", level="WARNING")
                 )
-        elif has_proxy:
-            await self.event_queue.put(
-                LogEvent(message="Активен прокси-пул: вызов Maigret изолирован, задействован ScanEngine.", level="INFO")
-            )
 
-        return await self.engine.run_scan(target, output_dir=output_dir)
+        return await self.engine.run_scan(target, output_dir=output_dir, session_id=session_id)
 
-    async def _run_native(
+    async def _run_native_maigret(
         self,
         target: TargetProfile,
         session_id: str,
@@ -80,38 +77,42 @@ class MaigretExecutor:
     ) -> ScanSessionResult:
         await self.event_queue.put(LogEvent(message=f"Запуск Maigret сканирования для {target.username}."))
 
-        def _search() -> List[Dict[str, Any]]:
-            return list(maigret.search(username=target.username)) if hasattr(maigret, "search") else []
+        def _execute_sync_search() -> List[Dict[str, Any]]:
+            if hasattr(maigret, "search"):
+                raw_results = maigret.search(username=target.username)
+                return list(raw_results) if raw_results else []
+            return []
 
-        raw_items = await asyncio.to_thread(_search)
+        raw_items = await asyncio.to_thread(_execute_sync_search)
         results: List[CheckResult] = []
         total = max(len(raw_items), 1)
 
         for idx, item in enumerate(raw_items, start=1):
-            is_found = "FOUND" in str(item.get("status", "FOUND")).upper()
+            status_str = str(item.get("status", "FOUND")).upper()
+            status = DetectionStatus.FOUND if "FOUND" in status_str else DetectionStatus.NOT_FOUND
             res = CheckResult(
                 platform_name=str(item.get("site_name", "Unknown")),
                 target=target,
-                status=DetectionStatus.FOUND if is_found else DetectionStatus.NOT_FOUND,
+                status=status,
                 profile_url=item.get("url_user"),
-                response_time_ms=float(item.get("response_time", 0.0) or 0.0),
+                response_time_ms=float(item.get("response_time", 0.0)) * 1000.0,
                 execution_type=ExecutionType.HTTP,
-                http_status_code=item.get("http_status"),
             )
             results.append(res)
             await self.event_queue.put(CheckResultEvent(result=res))
             await self.event_queue.put(ProgressUpdateEvent(completed=idx, total=total))
 
+        end_time = datetime.now(timezone.utc)
         session_result = ScanSessionResult(
             session_id=session_id,
             target=target,
             start_time=start_time,
-            end_time=datetime.now(timezone.utc),
+            end_time=end_time,
             results=results,
         )
 
-        target_out = output_dir or get_default_report_dir(session_id, target.username)
-        reports = await self.dispatcher.export_all(session_result, target_out)
-        await self.event_queue.put(ScanCompletedEvent(session_id=session_id, report_paths=reports))
+        target_out_dir = output_dir or get_default_report_dir(session_id, target.username)
+        generated_reports = await self.dispatcher.export_all(session_result, target_out_dir)
+        await self.event_queue.put(ScanCompletedEvent(session_id=session_id, report_paths=generated_reports))
 
         return session_result
