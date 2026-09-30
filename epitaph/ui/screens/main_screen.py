@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 import sys
 from typing import Any, Optional
 from textual import on
@@ -14,6 +15,7 @@ from epitaph.core.events import (
     ProgressUpdateEvent,
     ScanCompletedEvent,
 )
+from epitaph.execution.checkers.google.executor import GoogleExecutor
 from epitaph.execution.maigret import MaigretExecutor
 from epitaph.models.result import ScanSessionResult
 from epitaph.models.target import TargetProfile
@@ -22,12 +24,22 @@ from epitaph.ui.widgets.menu_slot import MenuSlot
 
 
 class MainScreen(Screen[None]):
+    BINDINGS = [
+        ("s", "save_html", "Сохранить HTML"),
+        ("o", "save_html", "Открыть HTML"),
+    ]
+
     def __init__(self) -> None:
         super().__init__()
         self.event_queue: asyncio.Queue[Any] = asyncio.Queue()
         self.maigret_executor = MaigretExecutor(event_queue=self.event_queue)
         self.engine = self.maigret_executor.engine
-        self._is_scanning = False
+        self.google_executor = GoogleExecutor(
+            event_queue=self.event_queue,
+            engine=self.engine,
+            dispatcher=self.engine.dispatcher,
+        )
+        self._is_scanning: bool = False
         self._selected_slot: Optional[int] = None
         self._last_session_result: Optional[ScanSessionResult] = None
 
@@ -43,7 +55,8 @@ class MainScreen(Screen[None]):
                         with Vertical(classes="menu_column"):
                             start = col * 10 + 1
                             for slot in range(start, start + 10):
-                                yield MenuSlot(slot_number=slot, title="Nickname" if slot == 1 else None)
+                                slot_title = "Nickname" if slot == 1 else ("eMail" if slot == 2 else None)
+                                yield MenuSlot(slot_number=slot, title=slot_title)
 
             with Vertical(id="footer_panel"):
                 with Horizontal(id="action_bar"):
@@ -59,7 +72,7 @@ class MainScreen(Screen[None]):
                 with Horizontal(id="command_bar"):
                     yield Static("Command / Slot > ", id="prompt_label")
                     yield Input(
-                        placeholder="введите номер (1-30) или никнейм цели...",
+                        placeholder="введите номер (1-30) или никнейм/email цели...",
                         id="command_input",
                     )
 
@@ -87,13 +100,13 @@ class MainScreen(Screen[None]):
             self.app.exit()
 
     def action_request_keyboard(self) -> None:
-        # Временный сброс захвата мыши для отображения экранной клавиатуры в Termux
+        # Временный сброс захвата мыши для принудительного вызова экранной клавиатуры Termux
         cmd_input = self.query_one("#command_input", Input)
         cmd_input.focus()
         cmd_input.cursor_position = len(cmd_input.value)
 
         driver = getattr(self.app, "_driver", None)
-        seq = "[?1000l[?1002l[?1003l[?1006l"
+        seq = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l"
         if driver and hasattr(driver, "write"):
             driver.write(seq)
         else:
@@ -110,7 +123,7 @@ class MainScreen(Screen[None]):
 
     def _restore_mouse_tracking(self) -> None:
         driver = getattr(self.app, "_driver", None)
-        seq = "[?1000h[?1002h[?1006h"
+        seq = "\x1b[?1000h\x1b[?1002h\x1b[?1006h"
         if driver and hasattr(driver, "write"):
             driver.write(seq)
         else:
@@ -132,8 +145,13 @@ class MainScreen(Screen[None]):
         if slot == 1:
             self._selected_slot = 1
             prompt.update("Target Nickname > ")
-            status.update("[ выбор ] Модуль 1. Nickname активен. Введите никнейм цели...")
+            status.update("[ выбор ] Модуль 1 > Nickname активен. Введите никнейм цели...")
             cmd_input.placeholder = "введите целевой никнейм или 'q' для выхода..."
+        elif slot == 2:
+            self._selected_slot = 2
+            prompt.update("Target eMail > ")
+            status.update("[ выбор ] Модуль 2 > eMail активен. Введите email цели...")
+            cmd_input.placeholder = "введите email (например, target@gmail.com)..."
         else:
             self._selected_slot = None
             prompt.update("Command / Slot > ")
@@ -168,15 +186,18 @@ class MainScreen(Screen[None]):
             return
 
         status.update("[ ожидание ] Запрос обрабатывается")
-        asyncio.create_task(self._execute_scan(TargetProfile(username=raw)))
+        target = TargetProfile(username=raw)
+        is_email = (self._selected_slot == 2) or ("@" in raw)
+        asyncio.create_task(self._execute_scan(target, is_email=is_email))
 
-    async def _execute_scan(self, target: TargetProfile) -> None:
+    async def _execute_scan(self, target: TargetProfile, is_email: bool = False) -> None:
         self._is_scanning = True
         status = self.query_one("#status_message", Static)
         save_btn = self.query_one("#save_html_button", Button)
         save_btn.display = False
 
-        scan_task = asyncio.create_task(self.maigret_executor.run_search(target))
+        executor = self.google_executor if is_email else self.maigret_executor
+        scan_task = asyncio.create_task(executor.run_search(target))
 
         while not scan_task.done() or not self.event_queue.empty():
             try:

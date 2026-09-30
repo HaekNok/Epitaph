@@ -25,12 +25,15 @@ class ScanEngine:
         self.event_queue = event_queue or asyncio.Queue()
 
     async def run_scan(
-        self, target: TargetProfile, output_dir: Optional[Path] = None
+        self,
+        target: TargetProfile,
+        output_dir: Optional[Path] = None,
+        checkers: Optional[List[BasePlatformChecker]] = None,
     ) -> ScanSessionResult:
         session_id = uuid.uuid4().hex[:8]
         start_time = datetime.now(timezone.utc)
-        checkers = CheckerRegistry.get_all_checkers()
-        total = len(checkers)
+        active_checkers = checkers if checkers is not None else CheckerRegistry.get_all_checkers()
+        total_checkers = len(active_checkers)
         results: List[CheckResult] = []
 
         async def worker(checker: BasePlatformChecker) -> None:
@@ -38,26 +41,23 @@ class ScanEngine:
             results.append(res)
             await self.event_queue.put(CheckResultEvent(result=res))
             await self.event_queue.put(
-                ProgressUpdateEvent(completed=len(results), total=total)
+                ProgressUpdateEvent(completed=len(results), total=total_checkers)
             )
 
         async with asyncio.TaskGroup() as tg:
-            for ch in checkers:
+            for ch in active_checkers:
                 tg.create_task(worker(ch))
 
-        end_time = datetime.now(timezone.utc)
         session_result = ScanSessionResult(
             session_id=session_id,
             target=target,
             start_time=start_time,
-            end_time=end_time,
+            end_time=datetime.now(timezone.utc),
             results=results,
         )
 
         target_out = output_dir or get_default_report_dir(session_id, target.username)
         reports = await self.dispatcher.export_all(session_result, target_out)
-        await self.event_queue.put(
-            ScanCompletedEvent(session_id=session_id, report_paths=reports)
-        )
+        await self.event_queue.put(ScanCompletedEvent(session_id=session_id, report_paths=reports))
 
         return session_result
