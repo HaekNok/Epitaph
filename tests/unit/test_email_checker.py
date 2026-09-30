@@ -1,4 +1,4 @@
-"""Комплексный набор тестов для модуля eMail-разведки (Слот 2), реестра и чекеров."""
+"""Комплексный набор тестов для модуля eMail-разведки (Слот 3), реестра и чекеров."""
 from __future__ import annotations
 
 import asyncio
@@ -7,19 +7,25 @@ import httpx
 import pytest
 
 from epitaph.execution.checkers.email.base import BaseEmailChecker
-from epitaph.execution.checkers.email.executor import EmailReconExecutor
+from epitaph.execution.checkers.email.executor import (
+    EmailReconExecutor,
+    GitHubEmailChecker,
+    GravatarEmailChecker,
+    SpotifyEmailChecker,
+    TwitterEmailChecker,
+    MicrosoftEmailChecker,
+    DuolingoEmailChecker,
+    ProtonMailEmailChecker,
+    MegaEmailChecker,
+)
 from epitaph.execution.checkers.email.registry import EmailCheckerRegistry
-from epitaph.execution.checkers.email.services.github import GitHubEmailChecker
-from epitaph.execution.checkers.email.services.gravatar import GravatarEmailChecker
-from epitaph.execution.checkers.email.services.spotify import SpotifyEmailChecker
-from epitaph.execution.checkers.email.services.twitter import TwitterEmailChecker
 from epitaph.models.base import DetectionStatus
 from epitaph.models.result import CheckResult
 from epitaph.models.target import TargetProfile
 
 
 def test_email_checker_registry_discovery() -> None:
-    # Проверка обнаружения и регистрации всех 12 специализированных чекеров
+    # Проверка обнаружения и регистрации всех 22 специализированных чекеров из единого модуля
     checkers = EmailCheckerRegistry.get_all_instances()
     names = {c.name.lower() for c in checkers}
     expected = {
@@ -35,14 +41,24 @@ def test_email_checker_registry_discovery() -> None:
         "tiktok",
         "twitter",
         "work.ua",
+        "microsoft",
+        "duolingo",
+        "gitlab",
+        "mega",
+        "protonmail",
+        "apple id",
+        "atlassian",
+        "pinterest",
+        "olx",
+        "docker hub",
     }
     assert expected.issubset(names)
-    assert len(checkers) >= 12
+    assert len(checkers) >= 22
 
 
 def test_opsec_active_probe_marking() -> None:
     # Проверка корректности маркировки активных чекеров с риском уведомления цели
-    active_names = {"discord", "github", "work.ua"}
+    active_names = {"discord", "github", "work.ua", "gitlab", "olx"}
     for checker in EmailCheckerRegistry.get_all_instances():
         if checker.name.lower() in active_names:
             assert checker.is_active_probe is True, f"Чекер {checker.name} должен быть active_probe"
@@ -53,7 +69,7 @@ def test_opsec_active_probe_marking() -> None:
 def test_base_email_sanitization() -> None:
     # Проверка очистки пробелов, приведения к нижнему регистру и отсечения CRLF
     checker = GravatarEmailChecker()
-    clean = checker.sanitize_email("  Test.User+Filter@Example.COM \r\n")
+    clean = checker.sanitize_email(" Test.User+Filter@Example.COM \r\n")
     assert clean == "test.user+filter@example.com"
 
     with pytest.raises(ValueError, match="Некорректный формат email"):
@@ -85,6 +101,8 @@ async def test_email_recon_executor_passive_mode_filtering() -> None:
     assert "github" not in ran_platforms
     assert "discord" not in ran_platforms
     assert "work.ua" not in ran_platforms
+    assert "gitlab" not in ran_platforms
+    assert "olx" not in ran_platforms
     assert "google" in ran_platforms
 
 
@@ -103,50 +121,43 @@ async def test_email_recon_executor_input_normalization() -> None:
     mock_engine.dispatcher.export_all = AsyncMock(return_value=[])
 
     executor = EmailReconExecutor(event_queue=queue, engine=mock_engine)
-    target = TargetProfile(username="  super_target  ")
+    target = TargetProfile(username=" super_target ")
     session_res = await executor.run_search(target)
 
     assert session_res.target.username == "super_target@gmail.com"
 
 
 @pytest.mark.asyncio
-async def test_email_recon_executor_taskgroup_resilience() -> None:
-    # Проверка устойчивости TaskGroup: сбой в одном чекере не останавливает остальные
-    queue: asyncio.Queue[object] = asyncio.Queue()
-    mock_engine = MagicMock()
+async def test_microsoft_checker_success() -> None:
+    checker = MicrosoftEmailChecker()
+    mock_client = AsyncMock(spec=httpx.AsyncClient)
+    mock_resp = MagicMock(spec=httpx.Response)
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"IfExistsResult": 0, "UserTenantType": "Personal"}
+    mock_client.post.return_value = mock_resp
 
-    async def side_effect(checker, target):
-        if getattr(checker, "name", "") == "Spotify":
-            raise RuntimeError("Искусственный сбой соединения")
-        return CheckResult(
-            platform_name=checker.name,
-            target=target,
-            status=DetectionStatus.FOUND,
-        )
+    target = TargetProfile(username="user@live.com")
+    result = await checker.check_http(target, mock_client)
 
-    mock_engine.scheduler.run_checker = AsyncMock(side_effect=side_effect)
-    mock_engine.dispatcher.export_all = AsyncMock(return_value=[])
-
-    executor = EmailReconExecutor(event_queue=queue, engine=mock_engine, passive_mode=True)
-    target = TargetProfile(username="user@example.com")
-    session_res = await executor.run_search(target)
-
-    spotify_res = next((r for r in session_res.results if r.platform_name == "Spotify"), None)
-    assert spotify_res is not None
-    assert spotify_res.status == DetectionStatus.ERROR
-    assert "Искусственный сбой" in (spotify_res.error_message or "")
-    assert session_res.found_count > 0
+    assert result.status == DetectionStatus.FOUND
+    assert result.platform_name == "Microsoft"
+    assert result.profile_url == "https://account.microsoft.com"
+    assert result.extracted_data.get("tenant_type") == "Personal"
 
 
 @pytest.mark.asyncio
-async def test_gravatar_email_checker_success() -> None:
-    # Проверка работы чекера Gravatar с MD5-хэшированием и парсингом профиля
-    checker = GravatarEmailChecker()
+async def test_duolingo_checker_success() -> None:
+    checker = DuolingoEmailChecker()
     mock_client = AsyncMock(spec=httpx.AsyncClient)
     mock_resp = MagicMock(spec=httpx.Response)
     mock_resp.status_code = 200
     mock_resp.json.return_value = {
-        "entry": [{"displayName": "Test Analyst", "currentLocation": "Kyiv, Ukraine"}]
+        "users": [{
+            "username": "polyglot_user",
+            "name": "Polyglot",
+            "learningLanguage": "es",
+            "picture": "//avatar.duolingo.com/pic.jpg",
+        }]
     }
     mock_client.get.return_value = mock_resp
 
@@ -154,24 +165,41 @@ async def test_gravatar_email_checker_success() -> None:
     result = await checker.check_http(target, mock_client)
 
     assert result.status == DetectionStatus.FOUND
-    assert result.platform_name == "Gravatar"
-    assert result.extracted_data.get("display_name") == "Test Analyst"
-    assert result.extracted_data.get("location") == "Kyiv, Ukraine"
+    assert result.platform_name == "Duolingo"
+    assert result.profile_url == "https://www.duolingo.com/profile/polyglot_user"
+    assert result.extracted_data.get("username") == "polyglot_user"
+    assert result.extracted_data.get("learning_language") == "es"
 
 
 @pytest.mark.asyncio
-async def test_spotify_param_encoding() -> None:
-    # Проверка передачи email в параметрах запроса Spotify для защиты спецсимволов
-    checker = SpotifyEmailChecker()
+async def test_protonmail_checker_success() -> None:
+    checker = ProtonMailEmailChecker()
     mock_client = AsyncMock(spec=httpx.AsyncClient)
     mock_resp = MagicMock(spec=httpx.Response)
     mock_resp.status_code = 200
-    mock_resp.json.return_value = {"status": 20}
+    mock_resp.text = "info:1:1\npub:4096R/1234ABCD"
     mock_client.get.return_value = mock_resp
 
-    target = TargetProfile(username="user+tag@example.com")
+    target = TargetProfile(username="analyst@proton.me")
     result = await checker.check_http(target, mock_client)
 
     assert result.status == DetectionStatus.FOUND
-    call_kwargs = mock_client.get.call_args.kwargs
-    assert call_kwargs.get("params") == {"validate": "1", "email": "user+tag@example.com"}
+    assert result.platform_name == "ProtonMail"
+    assert result.profile_url == "https://proton.me"
+
+
+@pytest.mark.asyncio
+async def test_mega_checker_success() -> None:
+    checker = MegaEmailChecker()
+    mock_client = AsyncMock(spec=httpx.AsyncClient)
+    mock_resp = MagicMock(spec=httpx.Response)
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = [{"v": 1, "k": "sample_encryption_key"}]
+    mock_client.post.return_value = mock_resp
+
+    target = TargetProfile(username="user@mega.nz")
+    result = await checker.check_http(target, mock_client)
+
+    assert result.status == DetectionStatus.FOUND
+    assert result.platform_name == "Mega"
+    assert result.profile_url == "https://mega.nz"

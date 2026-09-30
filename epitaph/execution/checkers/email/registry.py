@@ -1,8 +1,6 @@
 """Реестр модулей проверки сервисов по email."""
 from __future__ import annotations
 
-import importlib
-import pkgutil
 from typing import Callable, Dict, List, Type
 
 from epitaph.execution.checkers.email.base import BaseEmailChecker
@@ -25,10 +23,11 @@ class EmailCheckerRegistry:
 
     @classmethod
     def _ensure_services_loaded(cls) -> None:
-        """Автоматическое обнаружение и загрузка всех модулей проверки в пакете services."""
-        import epitaph.execution.checkers.email.services as services_pkg
-        for _, module_name, _ in pkgutil.iter_modules(services_pkg.__path__):
-            importlib.import_module(f"epitaph.execution.checkers.email.services.{module_name}")
+        """Гарантированная загрузка всех платформенных чекеров из единого модуля executor."""
+        try:
+            import epitaph.execution.checkers.email.executor  # noqa: F401
+        except ImportError:
+            pass
 
     @classmethod
     def get_all_instances(cls) -> List[BaseEmailChecker]:
