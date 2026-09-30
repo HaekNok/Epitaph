@@ -60,7 +60,7 @@
     <div class="card">
       <h2>Профиль Google (OSINT-разведка)</h2>
       <div class="profile-header">
-        {% if r.extracted_data.get('avatar_url') and (r.extracted_data.get('avatar_url').startswith('http://') or r.extracted_data.get('avatar_url').startswith('https://')) %}
+        {% if r.extracted_data.get('avatar_url') and (r.extracted_data.get('avatar_url').startswith('https://') or r.extracted_data.get('avatar_url').startswith('http://')) %}
         <img src="{{ r.extracted_data.avatar_url }}" alt="Avatar" class="avatar" rel="noopener noreferrer">
         {% endif %}
         <div class="profile-info">
@@ -79,7 +79,7 @@
         {% if r.extracted_data.get('youtube_channel_id') %}
         <div class="meta-item"><div class="meta-label">YouTube</div><div class="meta-value"><a href="https://www.youtube.com/channel/{{ r.extracted_data.youtube_channel_id }}" target="_blank" rel="noopener noreferrer">Канал</a></div></div>
         {% endif %}
-        {% if r.extracted_data.get('maps_profile_url') %}
+        {% if r.extracted_data.get('maps_profile_url') and (r.extracted_data.get('maps_profile_url').startswith('https://') or r.extracted_data.get('maps_profile_url').startswith('http://')) %}
         <div class="meta-item"><div class="meta-label">Google Карты</div><div class="meta-value"><a href="{{ r.extracted_data.maps_profile_url }}" target="_blank" rel="noopener noreferrer">Вклад / Отзывы ({{ r.extracted_data.get('maps_reviews_count', 0) }})</a></div></div>
         {% endif %}
       </div>
