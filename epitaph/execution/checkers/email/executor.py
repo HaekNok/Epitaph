@@ -1,4 +1,4 @@
-"""Координатор сканирования по email для Слота 2 (Google OSINT + Holehe Services)."""
+"""Координатор сканирования по email для Слота 2 с защитой OPSEC Fail-Closed и Passive Mode."""
 from __future__ import annotations
 
 import asyncio
@@ -36,9 +36,11 @@ class EmailReconExecutor:
         event_queue: Optional[asyncio.Queue[Any]] = None,
         engine: Optional["ScanEngine"] = None,
         dispatcher: Optional[ReportDispatcher] = None,
+        passive_mode: bool = True,
     ) -> None:
         self.event_queue = event_queue or asyncio.Queue()
         self.dispatcher = dispatcher or ReportDispatcher()
+        self.passive_mode = passive_mode
         if engine is None:
             from epitaph.core.engine import ScanEngine
             self.engine = ScanEngine(event_queue=self.event_queue, dispatcher=self.dispatcher)
@@ -46,7 +48,6 @@ class EmailReconExecutor:
             self.engine = engine
 
         self.google_checker = GoogleAccountChecker()
-        # Инициализация всех email-чекеров из реестра
         self.email_checkers = EmailCheckerRegistry.get_all_instances()
 
     async def run_search(
@@ -54,14 +55,35 @@ class EmailReconExecutor:
         target: TargetProfile,
         output_dir: Optional[Path] = None,
     ) -> ScanSessionResult:
+        # OPSEC-03: Проверка готовности прокси-пула перед запуском конкурентных задач
+        if getattr(self.engine.scheduler, "enforce_proxy", False):
+            pm = getattr(self.engine.scheduler, "proxy_manager", None)
+            if pm is not None and hasattr(pm, "has_available_proxies"):
+                if not await pm.has_available_proxies():
+                    raise RuntimeError("OPSEC Fail-Closed: Пул прокси истощен при enforce_proxy. Сканирование eMail заблокировано.")
+
+        # OPSEC-02: Фильтрация активных триггерных чекеров в пассивном режиме (защита от target tipping-off)
+        active_checkers = []
+        for checker in self.email_checkers:
+            if self.passive_mode and getattr(checker, "is_active_probe", False):
+                await self.event_queue.put(
+                    LogEvent(
+                        message=f"[ OPSEC Passive ] Пропуск активного чекера {checker.name} (риск уведомления цели)",
+                        level="DEBUG",
+                    )
+                )
+                continue
+            active_checkers.append(checker)
+
         session_id = uuid.uuid4().hex[:8]
         start_time = datetime.now(timezone.utc)
-        total_checks = 1 + len(self.email_checkers)
+        total_checks = 1 + len(active_checkers)
 
         await self.event_queue.put(StartScanEvent(target=target, session_id=session_id))
+        mode_desc = "пассивный" if self.passive_mode else "полный"
         await self.event_queue.put(
             LogEvent(
-                message=f"Запуск глубокой разведки по eMail ({total_checks} сервисов): {target.username}...",
+                message=f"Запуск разведки по eMail ({mode_desc} режим, {total_checks} модулей): {target.username}...",
                 level="INFO",
             )
         )
@@ -79,10 +101,9 @@ class EmailReconExecutor:
                 ProgressUpdateEvent(completed=completed_count, total=total_checks)
             )
 
-        # Параллельный запуск через asyncio.TaskGroup ядра
         async with asyncio.TaskGroup() as tg:
             tg.create_task(_run_single(self.google_checker))
-            for checker in self.email_checkers:
+            for checker in active_checkers:
                 tg.create_task(_run_single(checker))
 
         session_result = ScanSessionResult(

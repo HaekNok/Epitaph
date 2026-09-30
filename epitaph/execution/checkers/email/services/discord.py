@@ -17,6 +17,11 @@ class DiscordEmailChecker(BaseEmailChecker):
     def name(self) -> str:
         return "Discord"
 
+    @property
+    def is_active_probe(self) -> bool:
+        """Маркер активной проверки: сброс пароля отправляет email уведомление цели."""
+        return True
+
     async def probe_email(
         self,
         email: str,
@@ -35,7 +40,6 @@ class DiscordEmailChecker(BaseEmailChecker):
         resp = await client.post(api_url, json={"login": email}, headers=headers)
         elapsed_ms = (time.monotonic() - start_time) * 1000
 
-        # HTTP 204 No Content означает успешную отправку ссылки для сброса пароля (аккаунт найден)
         if resp.status_code == 204:
             return self.create_result(
                 target=target,
@@ -47,7 +51,6 @@ class DiscordEmailChecker(BaseEmailChecker):
 
         if resp.status_code == 400:
             data = resp.json()
-            # Код 20014 / EMAIL_NOT_FOUND означает отсутствие такого пользователя
             if data.get("code") == 20014 or "not found" in str(data).lower():
                 return self.create_result(
                     target=target,
@@ -55,7 +58,6 @@ class DiscordEmailChecker(BaseEmailChecker):
                     response_time_ms=elapsed_ms,
                     http_status_code=400,
                 )
-            # Если требуется решение капчи (hCaptcha)
             if "captcha_key" in data:
                 return self.create_result(
                     target=target,

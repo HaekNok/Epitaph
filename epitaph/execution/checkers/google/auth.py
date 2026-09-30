@@ -40,11 +40,22 @@ class GoogleSessionCredentials(BaseModel):
         except Exception:
             return None
 
+    def is_personal_account_detected(self) -> bool:
+        """Проверка, является ли сессия потенциально персональным аккаунтом оператора."""
+        return os.environ.get("EPITAPH_SOCK_PUPPET_CONFIRMED") != "1"
+
     def save_to_storage(self, config_path: Optional[Path] = None) -> Path:
+        """Безопасное сохранение сессионных куки с правами 0700 на папку и 0600 на файл."""
         target = config_path or self.get_default_config_path()
-        target.parent.mkdir(parents=True, exist_ok=True)
+        target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         try:
             target.parent.chmod(0o700)
+        except OSError:
+            pass
+
+        target.touch(mode=0o600, exist_ok=True)
+        try:
+            target.chmod(0o600)
         except OSError:
             pass
 
@@ -52,14 +63,9 @@ class GoogleSessionCredentials(BaseModel):
             dump_fn = getattr(self, "model_dump", getattr(self, "dict", None))
             json.dump(dump_fn(), f, indent=2)
 
-        try:
-            target.chmod(0o600)
-        except OSError:
-            pass
         return target
 
     def generate_sapisid_hash(self, origin: str = "https://contacts.google.com") -> str:
-        # Аутентификация во внутренних API Google через подпись SHA1 от метки времени и SAPISID
         timestamp = str(int(time.time()))
         digest = hashlib.sha1(f"{timestamp} {self.sapisid} {origin}".encode("utf-8")).hexdigest()
         return f"SAPISIDHASH {timestamp}_{digest}"

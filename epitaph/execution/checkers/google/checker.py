@@ -1,3 +1,4 @@
+import logging
 import time
 from typing import Any, Optional
 import httpx
@@ -12,6 +13,8 @@ from epitaph.execution.registry import register_checker
 from epitaph.models.base import DetectionStatus, ExecutionType
 from epitaph.models.result import CheckResult
 from epitaph.models.target import TargetProfile
+
+logger = logging.getLogger("epitaph.execution.checkers.google.checker")
 
 
 @register_checker
@@ -86,6 +89,12 @@ class GoogleAccountChecker(BasePlatformChecker):
                 error_message="Сессионные токены Google не сконфигурированы в ~/.epitaph/credentials/",
             )
 
+        if creds.is_personal_account_detected():
+            logger.warning(
+                "OPSEC Alert: Обнаружен персональный профиль Google. "
+                "Используйте исследовательский сок-паппет для предотвращения атрибуции оператора."
+            )
+
         try:
             people_res = await lookup_people_data(email, creds, client)
             if people_res is None:
@@ -154,5 +163,5 @@ class GoogleAccountChecker(BasePlatformChecker):
                 status=DetectionStatus.ERROR,
                 execution_type=self.execution_type,
                 response_time_ms=elapsed,
-                error_message=str(err),
+                error_message=f"Google Check Error: {type(err).__name__} {err}",
             )

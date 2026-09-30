@@ -1,4 +1,4 @@
-"""Базовый абстрактный класс для модулей проверки регистрации email."""
+"""Базовый абстрактный класс для модулей проверки регистрации email с усиленной валидацией."""
 from __future__ import annotations
 
 from abc import abstractmethod
@@ -13,7 +13,7 @@ from epitaph.models.base import DetectionStatus, ExecutionType
 from epitaph.models.result import CheckResult
 from epitaph.models.target import TargetProfile
 
-# RFC 5322 совместимое регулярное выражение для предварительной валидации
+# RFC 5322 совместимое регулярное выражение
 EMAIL_REGEX: Final[Pattern[str]] = re.compile(
     r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
     r"(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$"
@@ -29,8 +29,12 @@ class BaseEmailChecker(BasePlatformChecker):
 
     @property
     def rate_limit_delay(self) -> float:
-        # Базовая задержка между запросами к домену для предотвращения 429
         return 0.5
+
+    @property
+    def is_active_probe(self) -> bool:
+        """Маркер потенциального уведомления цели (Password Reset / Alerting)."""
+        return False
 
     @property
     def default_headers(self) -> Dict[str, str]:
@@ -47,8 +51,9 @@ class BaseEmailChecker(BasePlatformChecker):
         }
 
     def sanitize_email(self, raw_email: str) -> str:
-        """Валидация и нормализация email-адреса для защиты от инъекций."""
+        """Валидация и нормализация email-адреса для защиты от CRLF-инъекций и HPP."""
         cleaned = raw_email.strip().lower()
+        cleaned = cleaned.replace("\r", "").replace("\n", "")
         if not EMAIL_REGEX.match(cleaned):
             raise ValueError(f"Некорректный формат email-адреса: {raw_email}")
         return cleaned
@@ -59,7 +64,6 @@ class BaseEmailChecker(BasePlatformChecker):
         regex_pattern: str,
         group_index: int = 1,
     ) -> Optional[str]:
-        """Извлечение CSRF-токена из тела HTML через регулярное выражение."""
         match = re.search(regex_pattern, html_content)
         if match and len(match.groups()) >= group_index:
             return match.group(group_index)
@@ -75,7 +79,6 @@ class BaseEmailChecker(BasePlatformChecker):
         extracted_data: Optional[Dict[str, object]] = None,
         error_message: Optional[str] = None,
     ) -> CheckResult:
-        """Вспомогательный конструктор иммутабельного объекта CheckResult."""
         return CheckResult(
             platform_name=self.name,
             target=target,
@@ -93,7 +96,6 @@ class BaseEmailChecker(BasePlatformChecker):
         target: TargetProfile,
         client: httpx.AsyncClient,
     ) -> CheckResult:
-        """Реализация вызова check_http с автоматическим замером задержки."""
         start_time = time.monotonic()
         try:
             clean_email = self.sanitize_email(target.username)
@@ -156,7 +158,6 @@ class BaseEmailChecker(BasePlatformChecker):
         client: httpx.AsyncClient,
         start_time: float,
     ) -> CheckResult:
-        """Индивидуальная логика проверки email-адреса на целевой платформе."""
         raise NotImplementedError
 
     async def check_browser(
@@ -164,5 +165,4 @@ class BaseEmailChecker(BasePlatformChecker):
         target: TargetProfile,
         context: object,
     ) -> CheckResult:
-        """Email-чекеры работают исключительно через легковесный асинхронный HTTP-стек."""
         raise NotImplementedError("Browser execution is disabled for Email Checkers.")
