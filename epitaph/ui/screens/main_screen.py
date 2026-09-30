@@ -22,6 +22,25 @@ from epitaph.models.target import TargetProfile
 from epitaph.ui.widgets.banner import HeaderBanner
 from epitaph.ui.widgets.menu_slot import MenuSlot
 
+SLOT_TITLES: dict[int, str] = {
+    1: "Nickname",
+    2: "Telegram ID",
+    3: "Email Address",
+    4: "Phone Number",
+    5: "Full Name",
+    6: "INN",
+    7: "SNILS",
+    8: "Car Number",
+    9: "Organization",
+    10: "Bank Card",
+    11: "Password",
+    12: "Cookies",
+    13: "IP Address",
+    14: "Subdomain",
+    15: "Port Scanner",
+    16: "MAC Address",
+}
+
 
 class MainScreen(Screen[None]):
     BINDINGS = [
@@ -55,7 +74,7 @@ class MainScreen(Screen[None]):
                         with Vertical(classes="menu_column"):
                             start = col * 10 + 1
                             for slot in range(start, start + 10):
-                                slot_title = "Nickname" if slot == 1 else ("eMail" if slot == 2 else None)
+                                slot_title = SLOT_TITLES.get(slot)
                                 yield MenuSlot(slot_number=slot, title=slot_title)
 
             with Vertical(id="footer_panel"):
@@ -146,11 +165,17 @@ class MainScreen(Screen[None]):
             prompt.update("Target Nickname > ")
             status.update("[ выбор ] Модуль 1 > Nickname активен. Введите никнейм цели...")
             cmd_input.placeholder = "введите целевой никнейм или 'q' для выхода..."
-        elif slot == 2:
-            self._selected_slot = 2
-            prompt.update("Target eMail > ")
-            status.update("[ выбор ] Модуль 2 > eMail активен. Введите email цели...")
+        elif slot == 3:
+            self._selected_slot = 3
+            prompt.update("Target Email > ")
+            status.update("[ выбор ] Модуль 3 > Email Address активен. Введите email цели...")
             cmd_input.placeholder = "введите email (например, target@gmail.com)..."
+        elif slot in SLOT_TITLES:
+            self._selected_slot = None
+            title = SLOT_TITLES[slot]
+            prompt.update("Command / Slot > ")
+            status.update(f"[ заглушка ] Слот {slot} > {title} (модуль в разработке)")
+            cmd_input.placeholder = "введите номер слота (1-30) или 'q' для выхода..."
         else:
             self._selected_slot = None
             prompt.update("Command / Slot > ")
@@ -194,7 +219,7 @@ class MainScreen(Screen[None]):
 
         status.update("[ ожидание ] Запрос обрабатывается")
         target = TargetProfile(username=raw)
-        is_email = (self._selected_slot == 2) or ("@" in raw)
+        is_email = (self._selected_slot == 3) or ("@" in raw)
         asyncio.create_task(self._execute_scan(target, is_email=is_email))
 
     async def _execute_scan(self, target: TargetProfile, is_email: bool = False) -> None:
@@ -226,7 +251,7 @@ class MainScreen(Screen[None]):
         try:
             self._last_session_result = await scan_task
             found = self._last_session_result.found_count
-            mode_label = "eMail" if is_email else "Nickname"
+            mode_label = "Email" if is_email else "Nickname"
             status.update(
                 f"[ готово ] {mode_label} {self._last_session_result.session_id} | Найдено: {found} | Нажмите '> сохранить HTML'"
             )
