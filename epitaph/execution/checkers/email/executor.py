@@ -18,6 +18,7 @@ from epitaph.core.events import (
 from epitaph.execution.checkers.email.registry import EmailCheckerRegistry
 import epitaph.execution.checkers.email.services  # noqa: F401 - регистрация сервисов в реестре
 from epitaph.execution.checkers.google.checker import GoogleAccountChecker
+from epitaph.models.base import DetectionStatus
 from epitaph.models.result import CheckResult, ScanSessionResult
 from epitaph.models.target import TargetProfile
 from epitaph.reporting.dispatcher import ReportDispatcher, get_default_report_dir
@@ -48,13 +49,18 @@ class EmailReconExecutor:
             self.engine = engine
 
         self.google_checker = GoogleAccountChecker()
-        self.email_checkers = EmailCheckerRegistry.get_all_instances()
 
     async def run_search(
         self,
         target: TargetProfile,
         output_dir: Optional[Path] = None,
     ) -> ScanSessionResult:
+        # Нормализация email-адреса цели
+        raw_email = target.username.strip().lower()
+        if "@" not in raw_email:
+            raw_email = f"{raw_email}@gmail.com"
+        target = TargetProfile(username=raw_email, metadata=target.metadata)
+
         # OPSEC-03: Проверка готовности прокси-пула перед запуском конкурентных задач
         if getattr(self.engine.scheduler, "enforce_proxy", False):
             pm = getattr(self.engine.scheduler, "proxy_manager", None)
@@ -62,9 +68,12 @@ class EmailReconExecutor:
                 if not await pm.has_available_proxies():
                     raise RuntimeError("OPSEC Fail-Closed: Пул прокси истощен при enforce_proxy. Сканирование eMail заблокировано.")
 
+        # Загрузка актуальных инстансов чекеров из реестра
+        email_checkers = EmailCheckerRegistry.get_all_instances()
+
         # OPSEC-02: Фильтрация активных триггерных чекеров в пассивном режиме (защита от target tipping-off)
         active_checkers = []
-        for checker in self.email_checkers:
+        for checker in email_checkers:
             if self.passive_mode and getattr(checker, "is_active_probe", False):
                 await self.event_queue.put(
                     LogEvent(
@@ -93,7 +102,16 @@ class EmailReconExecutor:
 
         async def _run_single(checker_instance: Any) -> None:
             nonlocal completed_count
-            res = await self.engine.scheduler.run_checker(checker_instance, target)
+            try:
+                res = await self.engine.scheduler.run_checker(checker_instance, target)
+            except Exception as exc:
+                res = CheckResult(
+                    platform_name=getattr(checker_instance, "name", "Unknown"),
+                    target=target,
+                    status=DetectionStatus.ERROR,
+                    response_time_ms=0.0,
+                    error_message=f"Сбой выполнения чекера: {exc}",
+                )
             all_results.append(res)
             completed_count += 1
             await self.event_queue.put(CheckResultEvent(result=res))
