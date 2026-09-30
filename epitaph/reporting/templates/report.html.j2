@@ -13,6 +13,12 @@
     .meta-item { background: #21262d; padding: 12px; border-radius: 6px; }
     .meta-label { font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
     .meta-value { font-size: 16px; font-weight: bold; margin-top: 4px; word-break: break-word; }
+    .profile-header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+    .avatar { width: 64px; height: 64px; border-radius: 50%; border: 2px solid #58a6ff; object-fit: cover; }
+    .profile-info h3 { margin: 0 0 4px 0; color: #58a6ff; font-size: 20px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+    .badge-workspace { background: #1f6feb; color: #ffffff; }
+    .badge-personal { background: #238636; color: #ffffff; }
     .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 16px; }
     table { width: 100%; border-collapse: collapse; min-width: 520px; }
     th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #30363d; font-size: 14px; }
@@ -39,12 +45,47 @@
   <div class="card">
     <h1>Отчет сканирования Epitaph</h1>
     <div class="meta-grid">
-      <div class="meta-item"><div class="meta-label">Целевой никнейм</div><div class="meta-value">{{ data.target.username }}</div></div>
+      <div class="meta-item">
+        <div class="meta-label">{% if '@' in data.target.username %}Целевой email{% else %}Целевой никнейм{% endif %}</div>
+        <div class="meta-value">{{ data.target.username }}</div>
+      </div>
       <div class="meta-item"><div class="meta-label">Сессия</div><div class="meta-value">{{ data.session_id }}</div></div>
       <div class="meta-item"><div class="meta-label">Проверено</div><div class="meta-value">{{ data.total_scanned }}</div></div>
       <div class="meta-item"><div class="meta-label">Обнаружено</div><div class="meta-value" style="color: #3fb950;">{{ data.found_count }}</div></div>
     </div>
   </div>
+
+  {% for r in data.results %}
+    {% if r.platform_name == 'Google' and r.extracted_data and r.extracted_data.get('gaia_id') %}
+    <div class="card">
+      <h2>Профиль Google (OSINT-разведка)</h2>
+      <div class="profile-header">
+        {% if r.extracted_data.get('avatar_url') and (r.extracted_data.get('avatar_url').startswith('http://') or r.extracted_data.get('avatar_url').startswith('https://')) %}
+        <img src="{{ r.extracted_data.avatar_url }}" alt="Avatar" class="avatar" rel="noopener noreferrer">
+        {% endif %}
+        <div class="profile-info">
+          <h3>{{ r.extracted_data.get('display_name') or r.extracted_data.get('email') }}</h3>
+          <span class="badge {% if r.extracted_data.get('is_workspace_account') %}badge-workspace{% else %}badge-personal{% endif %}">
+            {% if r.extracted_data.get('is_workspace_account') %}Google Workspace (Организация){% else %}Google Account (Личный){% endif %}
+          </span>
+        </div>
+      </div>
+      <div class="meta-grid">
+        <div class="meta-item"><div class="meta-label">Gaia ID</div><div class="meta-value">{{ r.extracted_data.get('gaia_id') }}</div></div>
+        <div class="meta-item"><div class="meta-label">Email</div><div class="meta-value">{{ r.extracted_data.get('email') }}</div></div>
+        {% if r.extracted_data.get('calendar_timezone') %}
+        <div class="meta-item"><div class="meta-label">Часовой пояс</div><div class="meta-value">{{ r.extracted_data.get('calendar_timezone') }}</div></div>
+        {% endif %}
+        {% if r.extracted_data.get('youtube_channel_id') %}
+        <div class="meta-item"><div class="meta-label">YouTube</div><div class="meta-value"><a href="https://www.youtube.com/channel/{{ r.extracted_data.youtube_channel_id }}" target="_blank" rel="noopener noreferrer">Канал</a></div></div>
+        {% endif %}
+        {% if r.extracted_data.get('maps_profile_url') %}
+        <div class="meta-item"><div class="meta-label">Google Карты</div><div class="meta-value"><a href="{{ r.extracted_data.maps_profile_url }}" target="_blank" rel="noopener noreferrer">Вклад / Отзывы ({{ r.extracted_data.get('maps_reviews_count', 0) }})</a></div></div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  {% endfor %}
 
   <div class="card">
     <h2>Результаты проверок платформ</h2>

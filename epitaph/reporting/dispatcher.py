@@ -5,9 +5,11 @@ import asyncio
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import tempfile
 from typing import Dict, List, Optional
 import uuid
+import webbrowser
 
 from epitaph.models.result import ScanSessionResult
 from epitaph.reporting.base import BaseReportExporter
@@ -70,6 +72,25 @@ def get_default_report_dir(session_id: str, username: str = "") -> Path:
     return target
 
 
+def open_in_viewer(target_file: Path) -> bool:
+    # Запуск файла во внешнем просмотрщике (Termux / xdg-open / браузер)
+    resolved = target_file.resolve()
+    for cmd in ("termux-open", "xdg-open"):
+        opener = shutil.which(cmd)
+        if opener:
+            try:
+                subprocess.Popen([opener, str(resolved)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return True
+            except Exception:
+                pass
+    try:
+        webbrowser.open(f"file://{resolved}")
+        return True
+    except Exception:
+        pass
+    return False
+
+
 class ReportDispatcher:
     def __init__(self, exporters: Optional[List[BaseReportExporter]] = None) -> None:
         self.exporters = exporters or [
@@ -101,7 +122,6 @@ class ReportDispatcher:
             for exp in self.exporters:
                 tg.create_task(_run(exp))
 
-        # Дублирование HTML в публичный каталог Downloads
         downloads = get_downloads_dir()
         if downloads and "html" in results:
             clean_user = sanitize_filename(data.target.username)
@@ -125,7 +145,6 @@ class ReportDispatcher:
             target_file = output_path
         else:
             target_dir = get_default_report_dir(data.session_id, data.target.username)
-            # Внутри уникальной папки сессии сохраняем стандартное и компактное имя report.html
             target_file = target_dir / "report.html"
 
         result_path = await HtmlReportExporter().export(data, target_file)
@@ -144,12 +163,5 @@ class ReportDispatcher:
             except OSError:
                 pass
 
-        opener = shutil.which("termux-open") or shutil.which("xdg-open")
-        if opener:
-            try:
-                import subprocess
-                subprocess.Popen([opener, str(target_open)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except Exception:
-                pass
-
+        open_in_viewer(target_open)
         return target_open
