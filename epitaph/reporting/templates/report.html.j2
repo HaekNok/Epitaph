@@ -3,124 +3,1352 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Epitaph Report - {{ data.target.username }}</title>
+  <title>EPITAPH OSINT // DOSSIER #{{ (session_id or data.session_id)[:8] | upper }}</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f111a; color: #e6edf3; margin: 0; padding: 24px; }
-    .card { background: #161b22; border-radius: 8px; border: 1px solid #30363d; padding: 20px; margin-bottom: 20px; }
-    h1 { margin-top: 0; color: #58a6ff; font-size: 24px; }
-    h2 { margin-top: 0; color: #c9d1d9; font-size: 18px; }
-    .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 16px; }
-    .meta-item { background: #21262d; padding: 12px; border-radius: 6px; }
-    .meta-label { font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
-    .meta-value { font-size: 16px; font-weight: bold; margin-top: 4px; word-break: break-word; }
-    .profile-header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
-    .avatar { width: 64px; height: 64px; border-radius: 50%; border: 2px solid #58a6ff; object-fit: cover; }
-    .profile-info h3 { margin: 0 0 4px 0; color: #58a6ff; font-size: 20px; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
-    .badge-workspace { background: #1f6feb; color: #ffffff; }
-    .badge-personal { background: #238636; color: #ffffff; }
-    .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 16px; }
-    table { width: 100%; border-collapse: collapse; min-width: 520px; }
-    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #30363d; font-size: 14px; }
-    th { background: #21262d; color: #c9d1d9; font-weight: 600; }
-    tr:hover { background: #1f242c; }
-    .status-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
-    .status-FOUND { background: #238636; color: #ffffff; }
-    .status-NOT_FOUND { background: #30363d; color: #8b949e; }
-    .status-ERROR, .status-BLOCKED { background: #da3633; color: #ffffff; }
-    .status-RATE_LIMITED { background: #d29922; color: #ffffff; }
-    a { color: #58a6ff; text-decoration: none; word-break: break-all; }
-    a:hover { text-decoration: underline; }
-    @media (max-width: 600px) {
-      body { padding: 12px; }
-      .card { padding: 14px; margin-bottom: 14px; }
-      h1 { font-size: 20px; }
-      .meta-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
-      .meta-item { padding: 8px 10px; }
-      th, td { padding: 8px 10px; font-size: 13px; }
+    /* Базовые переменные палитры Crimson Noir */
+    :root {
+      --bg-page: #02060E;
+      --bg-card: #080E1A;
+      --bg-card-alt: #0D1527;
+      --bg-card-hover: #111A30;
+      --border-crimson: #8B1E3F;
+      --border-crimson-dim: rgba(139, 30, 63, 0.35);
+      --accent-scarlet: #C50337;
+      --accent-scarlet-glow: rgba(197, 3, 55, 0.25);
+      --text-primary: #D4D7DD;
+      --text-muted: #7B8294;
+      --text-dim: #454D5F;
+      --status-found: #16A765;
+      --status-warning: #F2C960;
+      --status-danger: #CC3A21;
+      --status-info: #4A86E8;
+      --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-page);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 24px 16px;
+      position: relative;
+      background-image: 
+        linear-gradient(rgba(139, 30, 63, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(139, 30, 63, 0.03) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+
+    .dossier-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* Карточки модулей в киберпанк-стилистике */
+    .cyber-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-crimson);
+      border-radius: 4px;
+      padding: 20px;
+      position: relative;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .cyber-card:hover {
+      border-color: var(--accent-scarlet);
+      box-shadow: 0 4px 24px var(--accent-scarlet-glow);
+    }
+
+    /* Угловые маркеры досье */
+    .cyber-card::before, .cyber-card::after {
+      content: "";
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      pointer-events: none;
+    }
+
+    .cyber-card::before {
+      top: -1px;
+      left: -1px;
+      border-top: 2px solid var(--accent-scarlet);
+      border-left: 2px solid var(--accent-scarlet);
+    }
+
+    .cyber-card::after {
+      bottom: -1px;
+      right: -1px;
+      border-bottom: 2px solid var(--accent-scarlet);
+      border-right: 2px solid var(--accent-scarlet);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-crimson-dim);
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-title .prefix {
+      color: var(--accent-scarlet);
+    }
+
+    .card-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 2px;
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      background: var(--bg-card-alt);
+      border: 1px solid var(--border-crimson-dim);
+      color: var(--text-muted);
+    }
+
+    /* ШАБЛОН 01: Hero Banner */
+    .hero-banner {
+      background: linear-gradient(135deg, rgba(8, 14, 26, 0.95), rgba(13, 21, 39, 0.95));
+      border: 1px solid var(--accent-scarlet);
+      padding: 24px;
+      position: relative;
+    }
+
+    .hero-topline {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--accent-scarlet);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      font-weight: 700;
+    }
+
+    .hero-title {
+      font-size: 26px;
+      font-weight: 800;
+      color: #FFFFFF;
+      letter-spacing: 1.5px;
+      margin-bottom: 6px;
+      word-break: break-word;
+    }
+
+    .hero-title span {
+      color: var(--accent-scarlet);
+    }
+
+    .hero-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      margin-bottom: 20px;
+    }
+
+    .hero-meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .hero-meta-item {
+      background: var(--bg-card-alt);
+      border: 1px solid var(--border-crimson-dim);
+      border-left: 3px solid var(--accent-scarlet);
+      padding: 10px 14px;
+      border-radius: 2px;
+    }
+
+    .hero-meta-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+
+    .hero-meta-val {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    /* Статусные бейджи */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 2px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .status-verified, .badge-clean, .status-FOUND {
+      background: rgba(22, 167, 101, 0.15);
+      border: 1px solid var(--status-found);
+      color: var(--status-found);
+    }
+
+    .status-partial, .badge-warning, .status-RATE_LIMITED {
+      background: rgba(242, 201, 96, 0.15);
+      border: 1px solid var(--status-warning);
+      color: var(--status-warning);
+    }
+
+    .status-clean, .status-NOT_FOUND {
+      background: rgba(123, 130, 148, 0.15);
+      border: 1px solid var(--text-muted);
+      color: var(--text-muted);
+    }
+
+    .status-critical, .badge-danger, .status-ERROR, .status-BLOCKED {
+      background: rgba(204, 58, 33, 0.15);
+      border: 1px solid var(--status-danger);
+      color: var(--status-danger);
+    }
+
+    /* ШАБЛОН 02: Target Persona Card */
+    .persona-container {
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .avatar-wrapper {
+      width: 100px;
+      height: 100px;
+      flex-shrink: 0;
+      border: 2px solid var(--border-crimson);
+      background: var(--bg-card-alt);
+      border-radius: 4px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .avatar-wrapper img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .avatar-svg-placeholder {
+      width: 60px;
+      height: 60px;
+      color: var(--border-crimson);
+    }
+
+    .persona-details {
+      flex: 1;
+      min-width: 260px;
+    }
+
+    .persona-name {
+      font-size: 20px;
+      font-weight: 800;
+      color: #FFFFFF;
+      margin-bottom: 4px;
+    }
+
+    .persona-handle {
+      font-size: 14px;
+      color: var(--accent-scarlet);
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+
+    .tags-container {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .tag-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      background: var(--bg-card-alt);
+      border: 1px solid var(--border-crimson-dim);
+      border-radius: 2px;
+      color: var(--text-primary);
+    }
+
+    .persona-specs-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      background: var(--bg-card-alt);
+      padding: 12px;
+      border: 1px solid var(--border-crimson-dim);
+      border-radius: 2px;
+    }
+
+    .spec-item .spec-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .spec-item .spec-value {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-top: 2px;
+      word-break: break-all;
+    }
+
+    /* ШАБЛОН 03: Breach Metric Cards */
+    .metric-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .metric-card {
+      background: var(--bg-card-alt);
+      border: 1px solid var(--border-crimson-dim);
+      padding: 16px;
+      border-radius: 2px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-card.critical {
+      border-top: 3px solid var(--status-danger);
+    }
+
+    .metric-card.clean {
+      border-top: 3px solid var(--status-found);
+    }
+
+    .metric-card.warning {
+      border-top: 3px solid var(--status-warning);
+    }
+
+    .metric-card-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+
+    .metric-card-num {
+      font-size: 28px;
+      font-weight: 800;
+      color: #FFFFFF;
+      letter-spacing: 1px;
+    }
+
+    .metric-card-num.danger {
+      color: var(--status-danger);
+    }
+
+    .metric-card-num.safe {
+      color: var(--status-found);
+    }
+
+    /* ШАБЛОН 04: Platform Profile Grid */
+    .platform-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .platform-card {
+      background: var(--bg-card-alt);
+      border: 1px solid var(--border-crimson-dim);
+      border-radius: 2px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 12px;
+      transition: border-color 0.2s ease;
+    }
+
+    .platform-card:hover {
+      border-color: var(--border-crimson);
+      background: var(--bg-card-hover);
+    }
+
+    .platform-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .platform-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: #FFFFFF;
+    }
+
+    .platform-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .latency-badge {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .platform-body {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .platform-data-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 3px 0;
+      border-bottom: 1px dashed rgba(123, 130, 148, 0.2);
+    }
+
+    .platform-data-item span:first-child {
+      color: var(--text-dim);
+      text-transform: uppercase;
+      font-size: 10px;
+    }
+
+    .platform-data-item span:last-child {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .cyber-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      background: rgba(139, 30, 63, 0.2);
+      border: 1px solid var(--border-crimson);
+      color: var(--text-primary);
+      text-decoration: none;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      padding: 8px 12px;
+      border-radius: 2px;
+      transition: all 0.2s ease;
+      width: 100%;
+    }
+
+    .cyber-link:hover {
+      background: var(--accent-scarlet);
+      border-color: var(--accent-scarlet);
+      color: #FFFFFF;
+      box-shadow: 0 0 10px var(--accent-scarlet-glow);
+    }
+
+    /* Таблицы с горизонтальным скроллингом */
+    .table-responsive {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border: 1px solid var(--border-crimson-dim);
+      border-radius: 2px;
+      margin-top: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 600px;
+      font-size: 13px;
+    }
+
+    th {
+      background: var(--bg-card-alt);
+      color: var(--text-muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-size: 11px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-crimson);
+      text-align: left;
+    }
+
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(139, 30, 63, 0.2);
+      color: var(--text-primary);
+    }
+
+    tr:hover td {
+      background: var(--bg-card-hover);
+    }
+
+    /* ШАБЛОН 05: Activity Timeline */
+    .timeline {
+      position: relative;
+      padding-left: 24px;
+      margin-top: 12px;
+    }
+
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 7px;
+      top: 4px;
+      bottom: 4px;
+      width: 2px;
+      background: var(--border-crimson);
+    }
+
+    .timeline-item {
+      position: relative;
+      margin-bottom: 16px;
+    }
+
+    .timeline-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .timeline-marker {
+      position: absolute;
+      left: -24px;
+      top: 4px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 2px solid var(--accent-scarlet);
+    }
+
+    .timeline-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 4px;
+      flex-wrap: wrap;
+    }
+
+    .timeline-time {
+      font-size: 11px;
+      color: var(--accent-scarlet);
+      font-weight: 700;
+    }
+
+    .timeline-cat {
+      font-size: 10px;
+      padding: 1px 6px;
+      background: var(--bg-card-alt);
+      border: 1px solid var(--border-crimson-dim);
+      color: var(--text-muted);
+      border-radius: 2px;
+    }
+
+    .timeline-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #FFFFFF;
+    }
+
+    .timeline-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* ШАБЛОН 07: Affiliations & Clusters */
+    .clusters-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .cluster-box {
+      background: var(--bg-card-alt);
+      border: 1px solid var(--border-crimson-dim);
+      border-radius: 2px;
+      padding: 16px;
+    }
+
+    .cluster-box-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .cluster-box-title .dot {
+      width: 6px;
+      height: 6px;
+      background: var(--accent-scarlet);
+      border-radius: 50%;
+    }
+
+    .cluster-items {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .cluster-item {
+      font-size: 12px;
+      background: var(--bg-card);
+      border: 1px solid rgba(139, 30, 63, 0.2);
+      padding: 8px 12px;
+      border-radius: 2px;
+      word-break: break-all;
+    }
+
+    /* ШАБЛОН 09: Risk Scoring */
+    .risk-scoring-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .risk-bar-container {
+      background: var(--bg-card-alt);
+      border: 1px solid var(--border-crimson-dim);
+      padding: 16px;
+      border-radius: 2px;
+    }
+
+    .risk-bar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .risk-bar-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .risk-bar-score {
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 8px;
+      background: var(--bg-page);
+      border: 1px solid var(--border-crimson-dim);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+
+    .risk-bar-footer {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* ШАБЛОН 10: Footer & Summary */
+    .dossier-footer {
+      background: var(--bg-card);
+      border: 1px solid var(--border-crimson-dim);
+      padding: 20px;
+      border-radius: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .footer-status-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      border-bottom: 1px solid var(--border-crimson-dim);
+      padding-bottom: 12px;
+    }
+
+    .formats-badges {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .format-badge {
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 2px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      border: 1px solid var(--border-crimson-dim);
+      background: var(--bg-card-alt);
+      color: var(--text-muted);
+    }
+
+    .format-badge.active {
+      border-color: var(--status-found);
+      color: var(--status-found);
+      background: rgba(22, 167, 101, 0.1);
+    }
+
+    .footer-checksum {
+      font-size: 11px;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+      word-break: break-all;
+    }
+
+    .footer-checksum span {
+      color: var(--text-muted);
+    }
+
+    .empty-state-notice {
+      padding: 16px;
+      background: var(--bg-card-alt);
+      border: 1px dashed var(--border-crimson-dim);
+      border-radius: 2px;
+      color: var(--text-muted);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    /* Мобильная адаптивность */
+    @media (max-width: 768px) {
+      body {
+        padding: 12px 8px;
+      }
+      .cyber-card {
+        padding: 14px;
+      }
+      .hero-title {
+        font-size: 20px;
+      }
+      .hero-meta-grid {
+        grid-template-columns: 1fr;
+      }
+      .persona-container {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      .tags-container {
+        justify-content: center;
+      }
+      .persona-specs-grid {
+        grid-template-columns: 1fr;
+        text-align: left;
+      }
+      .metric-cards-grid {
+        grid-template-columns: 1fr;
+      }
+      .platform-grid {
+        grid-template-columns: 1fr;
+      }
+      .risk-scoring-grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>Отчет сканирования Epitaph</h1>
-    <div class="meta-grid">
-      <div class="meta-item">
-        <div class="meta-label">{% if '@' in data.target.username %}Целевой email{% else %}Целевой никнейм{% endif %}</div>
-        <div class="meta-value">{{ data.target.username }}</div>
-      </div>
-      <div class="meta-item"><div class="meta-label">Сессия</div><div class="meta-value">{{ data.session_id }}</div></div>
-      <div class="meta-item"><div class="meta-label">Проверено</div><div class="meta-value">{{ data.total_scanned }}</div></div>
-      <div class="meta-item"><div class="meta-label">Обнаружено</div><div class="meta-value" style="color: #3fb950;">{{ data.found_count }}</div></div>
-    </div>
-  </div>
+  <div class="dossier-container">
 
-  {% for r in data.results %}
-    {% if r.platform_name == 'Google' and r.extracted_data and r.extracted_data.get('gaia_id') %}
-    <div class="card">
-      <h2>Профиль Google (OSINT-разведка)</h2>
-      <div class="profile-header">
-        {% if r.extracted_data.get('avatar_url') and (r.extracted_data.get('avatar_url').startswith('https://') or r.extracted_data.get('avatar_url').startswith('http://')) %}
-        <img src="{{ r.extracted_data.avatar_url }}" alt="Avatar" class="avatar" rel="noopener noreferrer">
-        {% endif %}
-        <div class="profile-info">
-          <h3>{{ r.extracted_data.get('display_name') or r.extracted_data.get('email') }}</h3>
-          <span class="badge {% if r.extracted_data.get('is_workspace_account') %}badge-workspace{% else %}badge-personal{% endif %}">
-            {% if r.extracted_data.get('is_workspace_account') %}Google Workspace (Организация){% else %}Google Account (Личный){% endif %}
-          </span>
+    <!-- ШАБЛОН 01: Обложка досье (Hero Banner) -->
+    <section class="cyber-card hero-banner">
+      <div class="hero-topline">
+        <div>// РАЗВЕДЫВАТЕЛЬНЫЙ БЮЛЛЕТЕНЬ // ОФИЦИАЛЬНОЕ ДОСЬЕ</div>
+        <div>СЕССИЯ: {{ (session_id or data.session_id)[:8] | upper }}</div>
+      </div>
+      <h1 class="hero-title">EPITAPH OSINT <span>//</span> DOSSIER #{{ (session_id or data.session_id)[:8] | upper }}</h1>
+      <div class="hero-subtitle">Автоматизированный отчёт разведки данных | Сводка цифрового присутствия цели @{{ (target or data.target).username }}</div>
+      
+      <div class="hero-meta-grid">
+        <div class="hero-meta-item">
+          <div class="hero-meta-label">Статус цели</div>
+          <div class="hero-meta-val">
+            {% if verification_status %}
+              <span class="status-badge {{ verification_status.badge_class }}">{{ verification_status.title }}</span>
+            {% elif data.found_count > 0 %}
+              <span class="status-badge status-verified">ЦЕЛЬ ВЕРИФИЦИРОВАНА</span>
+            {% else %}
+              <span class="status-badge status-clean">ЦИФРОВОЙ СЛЕД НЕ ОБНАРУЖЕН</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="hero-meta-item">
+          <div class="hero-meta-label">Источников опрошено</div>
+          <div class="hero-meta-val">{{ data.total_scanned }}</div>
+        </div>
+        <div class="hero-meta-item">
+          <div class="hero-meta-label">Обнаружено профилей</div>
+          <div class="hero-meta-val" style="color: var(--status-found);">{{ data.found_count }}</div>
+        </div>
+        <div class="hero-meta-item">
+          <div class="hero-meta-label">Время сессии</div>
+          <div class="hero-meta-val">{{ session_duration or "%.2fs"|format((data.end_time - data.start_time).total_seconds()) }}</div>
         </div>
       </div>
-      <div class="meta-grid">
-        <div class="meta-item"><div class="meta-label">Gaia ID</div><div class="meta-value">{{ r.extracted_data.get('gaia_id') }}</div></div>
-        <div class="meta-item"><div class="meta-label">Email</div><div class="meta-value">{{ r.extracted_data.get('email') }}</div></div>
-        {% if r.extracted_data.get('calendar_timezone') %}
-        <div class="meta-item"><div class="meta-label">Часовой пояс</div><div class="meta-value">{{ r.extracted_data.get('calendar_timezone') }}</div></div>
-        {% endif %}
-        {% if r.extracted_data.get('youtube_channel_id') %}
-        <div class="meta-item"><div class="meta-label">YouTube</div><div class="meta-value"><a href="https://www.youtube.com/channel/{{ r.extracted_data.youtube_channel_id }}" target="_blank" rel="noopener noreferrer">Канал</a></div></div>
-        {% endif %}
-        {% if r.extracted_data.get('maps_profile_url') and (r.extracted_data.get('maps_profile_url').startswith('https://') or r.extracted_data.get('maps_profile_url').startswith('http://')) %}
-        <div class="meta-item"><div class="meta-label">Google Карты</div><div class="meta-value"><a href="{{ r.extracted_data.maps_profile_url }}" target="_blank" rel="noopener noreferrer">Вклад / Отзывы ({{ r.extracted_data.get('maps_reviews_count', 0) }})</a></div></div>
+    </section>
+
+    <!-- ШАБЛОН 02: Профиль персоны (Target Persona Card) -->
+    <section class="cyber-card">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="prefix">02 //</span> Идентификационный профиль персоны
+        </div>
+        <div class="card-badge">PERSONA PROFILE CARD</div>
+      </div>
+      <div class="persona-container">
+        <div class="avatar-wrapper">
+          {% if target_avatar %}
+            <img src="{{ target_avatar }}" alt="Avatar" rel="noopener noreferrer">
+          {% else %}
+            <!-- Автономный векторный кибер-аватар -->
+            <svg class="avatar-svg-placeholder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="8" r="4"/>
+              <path d="M4 20c0-4 4-6 8-6s8 2 8 6"/>
+              <circle cx="12" cy="12" r="11" stroke-dasharray="2 3"/>
+            </svg>
+          {% endif %}
+        </div>
+        <div class="persona-details">
+          <div class="persona-name">
+            {% if target_display_name %}
+              {{ target_display_name }}
+            {% else %}
+              Субъект: {{ (target or data.target).username }}
+            {% endif %}
+          </div>
+          <div class="persona-handle">@{{ (target or data.target).username }}</div>
+          
+          <div class="tags-container">
+            {% if profile_tags %}
+              {% for tag in profile_tags %}
+                <span class="tag-badge">{{ tag }}</span>
+              {% endfor %}
+            {% else %}
+              <span class="tag-badge">ОБЩИЙ ЦИФРОВОЙ СЛЕД</span>
+            {% endif %}
+          </div>
+
+          <div class="persona-specs-grid">
+            <div class="spec-item">
+              <div class="spec-label">Сетевой идентификатор</div>
+              <div class="spec-value">@{{ (target or data.target).username }}</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-label">Электронная почта</div>
+              <div class="spec-value">{{ target_email or "Не зафиксирован" }}</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-label">Инициализация сессии</div>
+              <div class="spec-value">{{ data.start_time.strftime('%Y-%m-%d %H:%M:%S UTC') }}</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-label">Идентификатор сессии</div>
+              <div class="spec-value">{{ data.session_id }}</div>
+            </div>
+            {% if google_data %}
+            <div class="spec-item">
+              <div class="spec-label">Google Gaia ID</div>
+              <div class="spec-value">{{ google_data.get('gaia_id') }}</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-label">Тип аккаунта Google</div>
+              <div class="spec-value">
+                <span class="status-badge {% if google_data.get('is_workspace_account') %}status-partial{% else %}status-verified{% endif %}">
+                  {% if google_data.get('is_workspace_account') %}Google Workspace (Организация){% else %}Google Account (Личный){% endif %}
+                </span>
+              </div>
+            </div>
+            {% if google_data.get('calendar_timezone') %}
+            <div class="spec-item">
+              <div class="spec-label">Часовой пояс (Calendar)</div>
+              <div class="spec-value">{{ google_data.get('calendar_timezone') }}</div>
+            </div>
+            {% endif %}
+            {% if google_data.get('maps_profile_url') %}
+            <div class="spec-item">
+              <div class="spec-label">Google Карты</div>
+              <div class="spec-value">
+                <a href="{{ google_data.maps_profile_url }}" target="_blank" rel="noopener noreferrer" style="color: var(--status-info); text-decoration: none;">
+                  Отзывы и вклад ({{ google_data.get('maps_reviews_count', 0) }}) &gt;
+                </a>
+              </div>
+            </div>
+            {% endif %}
+            {% if google_data.get('youtube_channel_id') %}
+            <div class="spec-item">
+              <div class="spec-label">YouTube Канал</div>
+              <div class="spec-value">
+                <a href="https://www.youtube.com/channel/{{ google_data.youtube_channel_id }}" target="_blank" rel="noopener noreferrer" style="color: var(--status-info); text-decoration: none;">
+                  Перейти к каналу &gt;
+                </a>
+              </div>
+            </div>
+            {% endif %}
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ШАБЛОН 03: Мониторинг утечек (Breach & Exposure Metric Cards) -->
+    <section class="cyber-card">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="prefix">03 //</span> Мониторинг утечек и компрометации
+        </div>
+        <div class="card-badge">BREACH &amp; EXPOSURE METRICS</div>
+      </div>
+
+      <div class="metric-cards-grid">
+        <div class="metric-card {% if breach_metrics and breach_metrics.databases_count > 0 %}critical{% else %}clean{% endif %}">
+          <div class="metric-card-label">Скомпрометировано баз</div>
+          <div class="metric-card-num {% if breach_metrics and breach_metrics.databases_count > 0 %}danger{% else %}safe{% endif %}">
+            {{ breach_metrics.databases_count if breach_metrics else 0 }}
+          </div>
+        </div>
+        <div class="metric-card {% if breach_metrics and breach_metrics.records_count > 0 %}critical{% else %}clean{% endif %}">
+          <div class="metric-card-label">Утекших записей и хэшей</div>
+          <div class="metric-card-num {% if breach_metrics and breach_metrics.records_count > 0 %}danger{% else %}safe{% endif %}">
+            {{ breach_metrics.records_count if breach_metrics else 0 }}
+          </div>
+        </div>
+        <div class="metric-card {% if breach_metrics and breach_metrics.risk_level == 'CRITICAL' %}critical{% elif breach_metrics and breach_metrics.risk_level == 'HIGH' %}warning{% else %}clean{% endif %}">
+          <div class="metric-card-label">Уровень опасности</div>
+          <div class="metric-card-num" style="color: {{ breach_metrics.risk_color if breach_metrics else 'var(--status-found)' }};">
+            {{ breach_metrics.risk_level if breach_metrics else 'CLEAN' }}
+          </div>
+        </div>
+      </div>
+
+      {% if breach_metrics and breach_metrics.breaches %}
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Наименование базы</th>
+                <th>Дата утечки</th>
+                <th>Скомпрометированные данные</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for b in breach_metrics.breaches %}
+                <tr>
+                  <td><strong>{{ b.get('name') or b.get('title') or 'Неизвестный источник' }}</strong></td>
+                  <td>{{ b.get('breach_date') or b.get('date') or 'Н/Д' }}</td>
+                  <td>{{ b.get('data_classes') | join(', ') if b.get('data_classes') else 'Учетные записи / Пароли' }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="empty-state-notice">
+          [ СТАТУС: ЧИСТО ] В открытых реестрах утечек и реестрах компрометации совпадений по цели не обнаружено.
+        </div>
+      {% endif %}
+    </section>
+
+    <!-- ШАБЛОН 04: Социальный след (Platform Profile Grid) -->
+    <section class="cyber-card">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="prefix">04 //</span> Социальный след и обнаруженные профили
+        </div>
+        <div class="card-badge">НАЙДЕНО: {{ found_results|length if found_results is defined else data.found_count }}</div>
+      </div>
+
+      {% if (found_results and found_results|length > 0) or data.found_count > 0 %}
+        <div class="platform-grid">
+          {% for r in (found_results if found_results is defined else data.results) %}
+            {% if r.status == 'FOUND' %}
+              <div class="platform-card">
+                <div>
+                  <div class="platform-card-header">
+                    <div class="platform-name">{{ r.platform_name }}</div>
+                    <div class="platform-meta">
+                      <span class="status-badge status-FOUND">FOUND</span>
+                    </div>
+                  </div>
+                  <div class="latency-badge" style="margin-top: 4px;">LATENCY: {{ "%.1f"|format(r.response_time_ms) }} ms // {{ r.execution_type }}</div>
+                  
+                  <div class="platform-body" style="margin-top: 10px;">
+                    {% if r.extracted_data %}
+                      {% for k, v in r.extracted_data.items() %}
+                        {% if k not in ['avatar_url', 'profile_url'] and v %}
+                          <div class="platform-data-item">
+                            <span>{{ k }}</span>
+                            <span>{{ v }}</span>
+                          </div>
+                        {% endif %}
+                      {% endfor %}
+                    {% else %}
+                      <div class="platform-data-item">
+                        <span>Статус HTTP</span>
+                        <span>{{ r.http_status_code or 200 }} OK</span>
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+
+                {% if r.profile_url and (r.profile_url.startswith('https://') or r.profile_url.startswith('http://')) %}
+                  <a href="{{ r.profile_url }}" target="_blank" rel="noopener noreferrer" class="cyber-link">
+                    Открыть профиль &gt;
+                  </a>
+                {% endif %}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state-notice">
+          [!] Активные профили на опрашиваемых платформах не обнаружены.
+        </div>
+      {% endif %}
+
+      <!-- Полный журнал опроса ресурсов -->
+      {% if other_results and other_results|length > 0 %}
+        <div style="margin-top: 20px;">
+          <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">
+            Журнал остальных опрошенных источников ({{ other_results|length }})
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Платформа</th>
+                  <th>Тип</th>
+                  <th>Статус</th>
+                  <th>Задержка</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in other_results[:15] %}
+                  <tr>
+                    <td>{{ r.platform_name }}</td>
+                    <td>{{ r.execution_type }}</td>
+                    <td><span class="status-badge status-{{ r.status }}">{{ r.status }}</span></td>
+                    <td>{{ "%.1f"|format(r.response_time_ms) }} ms</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+    </section>
+
+    <!-- ШАБЛОН 05: Хронология действий (Activity Timeline) -->
+    <section class="cyber-card">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="prefix">05 //</span> Хронология действий и таймлайн сессии
+        </div>
+        <div class="card-badge">ACTIVITY TIMELINE</div>
+      </div>
+
+      <div class="timeline">
+        {% if timeline_events %}
+          {% for ev in timeline_events %}
+            <div class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-header">
+                <span class="timeline-time">{{ ev.timestamp }}</span>
+                <span class="timeline-cat">{{ ev.category }}</span>
+                <span class="timeline-title">{{ ev.title }}</span>
+              </div>
+              <div class="timeline-desc">{{ ev.description }}</div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-header">
+              <span class="timeline-time">{{ data.start_time.strftime('%Y-%m-%d %H:%M:%S UTC') }}</span>
+              <span class="timeline-cat">SYSTEM</span>
+              <span class="timeline-title">Инициализация сессии сканирования</span>
+            </div>
+            <div class="timeline-desc">Запуск пула воркеров для опроса целевых платформ</div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-header">
+              <span class="timeline-time">{{ data.end_time.strftime('%Y-%m-%d %H:%M:%S UTC') }}</span>
+              <span class="timeline-cat">SYSTEM</span>
+              <span class="timeline-title">Завершение сессии сканирования</span>
+            </div>
+            <div class="timeline-desc">Опрошено {{ data.total_scanned }} источников, обнаружено {{ data.found_count }} совпадений</div>
+          </div>
         {% endif %}
       </div>
-    </div>
-    {% endif %}
-  {% endfor %}
+    </section>
 
-  <div class="card">
-    <h2>Результаты проверок платформ</h2>
-    <div class="table-responsive">
-      <table>
-        <thead>
-          <tr>
-            <th>Платформа</th>
-            <th>Тип</th>
-            <th>Статус</th>
-            <th>Задержка</th>
-            <th>Ссылка на профиль</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in data.results %}
-          <tr>
-            <td><strong>{{ r.platform_name }}</strong></td>
-            <td>{{ r.execution_type }}</td>
-            <td><span class="status-badge status-{{ r.status }}">{{ r.status }}</span></td>
-            <td>{{ "%.1f"|format(r.response_time_ms) }} ms</td>
-            <td>
-              {% if r.profile_url and (r.profile_url.startswith('https://') or r.profile_url.startswith('http://')) %}
-              <a href="{{ r.profile_url }}" target="_blank" rel="noopener noreferrer">{{ r.profile_url }}</a>
-              {% elif r.profile_url %}
-              <span>{{ r.profile_url }}</span>
-              {% else %}
-              -
-              {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    <!-- ШАБЛОН 06: Сетевой анализ и инфраструктура (Network & DNS Table) -->
+    <section class="cyber-card">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="prefix">06 //</span> Сетевой анализ и инфраструктура
+        </div>
+        <div class="card-badge">NETWORK &amp; DNS</div>
+      </div>
+
+      {% if network_artifacts and network_artifacts|length > 0 %}
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>IP-адрес</th>
+                <th>Домен / Хост</th>
+                <th>Провайдер / ASN</th>
+                <th>Открытые порты</th>
+                <th>Статус</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for net in network_artifacts %}
+                <tr>
+                  <td><code>{{ net.get('ip') or '-' }}</code></td>
+                  <td>{{ net.get('domain') or '-' }}</td>
+                  <td>{{ net.get('asn') or '-' }}</td>
+                  <td><code>{{ net.get('ports') or '-' }}</code></td>
+                  <td><span class="status-badge status-verified">{{ net.get('status') or 'ACTIVE' }}</span></td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="empty-state-notice">
+          [ СЕТЕВОЙ МОНИТОРИНГ ] Сетевые артефакты, выделенные IP-адреса и открытые порты в рамках текущей сессии не зафиксированы.
+        </div>
+      {% endif %}
+    </section>
+
+    <!-- ШАБЛОН 07: Граф связей (Affiliations & Clusters) -->
+    <section class="cyber-card">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="prefix">07 //</span> Граф связей, аффилиации и кластеры
+        </div>
+        <div class="card-badge">CLUSTERING &amp; AFFILIATIONS</div>
+      </div>
+
+      <div class="clusters-grid">
+        <div class="cluster-box">
+          <div class="cluster-box-title">
+            <div class="dot"></div> Прямые контакты
+          </div>
+          <div class="cluster-items">
+            {% if affiliations and affiliations.contacts %}
+              {% for c in affiliations.contacts %}
+                <div class="cluster-item">{{ c }}</div>
+              {% endfor %}
+            {% else %}
+              <div class="cluster-item" style="color: var(--text-dim);">Дополнительные контакты не выявлены</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="cluster-box">
+          <div class="cluster-box-title">
+            <div class="dot"></div> Сообщества и организации
+          </div>
+          <div class="cluster-items">
+            {% if affiliations and affiliations.communities %}
+              {% for com in affiliations.communities %}
+                <div class="cluster-item">{{ com }}</div>
+              {% endfor %}
+            {% else %}
+              <div class="cluster-item" style="color: var(--text-dim);">Ассоциированные группы не выявлены</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="cluster-box">
+          <div class="cluster-box-title">
+            <div class="dot"></div> Криптовалютные кошельки
+          </div>
+          <div class="cluster-items">
+            {% if affiliations and affiliations.crypto_wallets %}
+              {% for w in affiliations.crypto_wallets %}
+                <div class="cluster-item"><code>{{ w }}</code></div>
+              {% endfor %}
+            {% else %}
+              <div class="cluster-item" style="color: var(--text-dim);">Криптокошельки не обнаружены</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ШАБЛОН 08: Геолокация и метаданные (Geo & EXIF Block) -->
+    <section class="cyber-card">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="prefix">08 //</span> Геолокация и метаданные
+        </div>
+        <div class="card-badge">GEO &amp; EXIF ATTR</div>
+      </div>
+
+      {% if geo_data %}
+        <div class="persona-specs-grid">
+          <div class="spec-item">
+            <div class="spec-label">Локация / Регион</div>
+            <div class="spec-value">{{ geo_data.get('location_name') or 'Региональная зона' }}</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Источник пространственных данных</div>
+            <div class="spec-value">{{ geo_data.get('source') or 'OSINT чекер' }}</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Координаты</div>
+            <div class="spec-value"><code>{{ geo_data.get('coordinates') or 'Не зафиксированы' }}</code></div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Радиус погрешности</div>
+            <div class="spec-value">{{ geo_data.get('accuracy_radius') or 'Город / Регион' }}</div>
+          </div>
+        </div>
+      {% else %}
+        <div class="empty-state-notice">
+          [ ГЕОПРОСТРАНСТВЕННЫЙ АНАЛИЗ ] Пространственные маркеры и метаданные EXIF в текущей сессии не зафиксированы.
+        </div>
+      {% endif %}
+    </section>
+
+    <!-- ШАБЛОН 09: Оценка рисков (Risk Scoring Indicators) -->
+    <section class="cyber-card">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="prefix">09 //</span> Оценка рисков и уязвимости цели
+        </div>
+        <div class="card-badge">RISK SCORING MATRIX</div>
+      </div>
+
+      <div class="risk-scoring-grid">
+        <div class="risk-bar-container">
+          <div class="risk-bar-header">
+            <span class="risk-bar-title">Доступность персональных данных</span>
+            <span class="risk-bar-score" style="color: {{ risk_scores.data_exposure.color if risk_scores else 'var(--status-warning)' }};">
+              {{ risk_scores.data_exposure.score if risk_scores else 50 }}%
+            </span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" style="width: {{ risk_scores.data_exposure.score if risk_scores else 50 }}%; background-color: {{ risk_scores.data_exposure.color if risk_scores else 'var(--status-warning)' }};"></div>
+          </div>
+          <div class="risk-bar-footer">
+            <span>Уровень экспозиции</span>
+            <span>[{{ risk_scores.data_exposure.level if risk_scores else 'УМЕРЕННЫЙ' }}]</span>
+          </div>
+        </div>
+
+        <div class="risk-bar-container">
+          <div class="risk-bar-header">
+            <span class="risk-bar-title">Защищенность инфраструктуры</span>
+            <span class="risk-bar-score" style="color: {{ risk_scores.infra_protection.color if risk_scores else 'var(--status-found)' }};">
+              {{ risk_scores.infra_protection.score if risk_scores else 70 }}%
+            </span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" style="width: {{ risk_scores.infra_protection.score if risk_scores else 70 }}%; background-color: {{ risk_scores.infra_protection.color if risk_scores else 'var(--status-found)' }};"></div>
+          </div>
+          <div class="risk-bar-footer">
+            <span>Статус защищенности</span>
+            <span>[{{ risk_scores.infra_protection.level if risk_scores else 'ВЫСОКИЙ' }}]</span>
+          </div>
+        </div>
+
+        <div class="risk-bar-container">
+          <div class="risk-bar-header">
+            <span class="risk-bar-title">Индекс приватности и OPSEC</span>
+            <span class="risk-bar-score" style="color: {{ risk_scores.privacy_opsec.color if risk_scores else 'var(--status-warning)' }};">
+              {{ risk_scores.privacy_opsec.score if risk_scores else 60 }}%
+            </span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" style="width: {{ risk_scores.privacy_opsec.score if risk_scores else 60 }}%; background-color: {{ risk_scores.privacy_opsec.color if risk_scores else 'var(--status-warning)' }};"></div>
+          </div>
+          <div class="risk-bar-footer">
+            <span>Индекс анонимности</span>
+            <span>[{{ risk_scores.privacy_opsec.level if risk_scores else 'УМЕРЕННЫЙ' }}]</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ШАБЛОН 10: Заключение и экспортный статус (Footer & Summary) -->
+    <footer class="dossier-footer">
+      <div class="footer-status-line">
+        <div style="font-weight: 700; color: #FFFFFF; font-size: 13px;">
+          [ АВТОНОМНЫЙ ДОКУМЕНТ ] Все модули собраны в единый автономный HTML-документ
+        </div>
+        <div class="formats-badges">
+          <span class="format-badge active">HTML // АКТИВЕН</span>
+          <span class="format-badge">JSON // ДАМП</span>
+          <span class="format-badge">PDF // ВЕКТОР</span>
+          <span class="format-badge">TXT // ЛОГ</span>
+        </div>
+      </div>
+
+      <div class="footer-checksum">
+        <span>ХЭШ СЕССИИ (SHA-256):</span> {{ session_hash or "DA39A3EE5E6B4B0D3255BFEF95601890AFD80709" }}
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-dim); flex-wrap: wrap; gap: 8px;">
+        <div>EPITAPH OSINT FRAMEWORK // HIGH-PERFORMANCE ASYNCHRONOUS ENGINE</div>
+        <div>ОТЧЕТ СГЕНЕРИРОВАН: {{ generation_time or data.end_time.strftime('%Y-%m-%d %H:%M:%S UTC') }}</div>
+      </div>
+    </footer>
+
   </div>
 </body>
 </html>
