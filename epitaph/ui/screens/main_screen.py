@@ -15,7 +15,6 @@ from epitaph.core.events import (
     ProgressUpdateEvent,
     ScanCompletedEvent,
 )
-from epitaph.execution.checkers.email.executor import EmailReconExecutor
 from epitaph.execution.checkers.google.executor import GoogleExecutor
 from epitaph.execution.maigret import MaigretExecutor
 from epitaph.models.result import ScanSessionResult
@@ -35,7 +34,7 @@ class MainScreen(Screen[None]):
         self.event_queue: asyncio.Queue[Any] = asyncio.Queue()
         self.maigret_executor = MaigretExecutor(event_queue=self.event_queue)
         self.engine = self.maigret_executor.engine
-        self.email_executor = EmailReconExecutor(
+        self.google_executor = GoogleExecutor(
             event_queue=self.event_queue,
             engine=self.engine,
             dispatcher=self.engine.dispatcher,
@@ -205,7 +204,7 @@ class MainScreen(Screen[None]):
         save_btn = self.query_one("#save_html_button", Button)
         save_btn.display = False
 
-        executor = self.email_executor if is_email else self.maigret_executor
+        executor = self.google_executor if is_email else self.maigret_executor
         scan_task = asyncio.create_task(executor.run_search(target))
 
         while not scan_task.done() or not self.event_queue.empty():
