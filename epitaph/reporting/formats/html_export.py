@@ -44,7 +44,7 @@ class HtmlReportExporter(BaseReportExporter):
             target_email = str(google_data.get("email"))
         else:
             for r in data.results:
-                if r.extracted_data.get("email"):
+                if r.extracted_data and r.extracted_data.get("email"):
                     target_email = str(r.extracted_data.get("email"))
                     break
 
@@ -55,7 +55,7 @@ class HtmlReportExporter(BaseReportExporter):
             raw_avatar = google_data.get("avatar_url")
         if not raw_avatar:
             for r in data.results:
-                if r.extracted_data.get("avatar_url"):
+                if r.extracted_data and r.extracted_data.get("avatar_url"):
                     raw_avatar = r.extracted_data.get("avatar_url")
                     break
         if raw_avatar and isinstance(raw_avatar, str) and (raw_avatar.startswith("http://") or raw_avatar.startswith("https://")):
@@ -111,7 +111,7 @@ class HtmlReportExporter(BaseReportExporter):
         breach_raw = data.target.metadata.get("breaches") or []
         if not breach_raw:
             for r in data.results:
-                if "breach" in r.platform_name.lower() and r.extracted_data.get("breaches"):
+                if "breach" in r.platform_name.lower() and r.extracted_data and r.extracted_data.get("breaches"):
                     breach_raw = r.extracted_data.get("breaches")
                     break
         db_count = len(breach_raw) if isinstance(breach_raw, list) else int(data.target.metadata.get("breach_count", 0))
@@ -254,7 +254,8 @@ class HtmlReportExporter(BaseReportExporter):
         }
 
     def _render_sync(self, data: ScanSessionResult, output_path: Path) -> Path:
-        # Синхронный рендеринг HTML-шаблона для вызова в отдельном потоке
+        # Синхронный рендеринг HTML-шаблона с созданием директории
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         template_dir = Path(__file__).resolve().parent.parent / "templates"
         env = Environment(
             loader=FileSystemLoader(str(template_dir)),

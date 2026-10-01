@@ -317,17 +317,10 @@ class MainScreen(Screen[None]):
             return
 
         status = self.query_one("#status_message", Static)
-        status.update("[ экспорт ] Генерация HTML отчета...")
+        status.update("[ экспорт ] Экспорт и открытие HTML-отчета...")
         try:
-            reports = await self.dispatcher.export_all(self._last_session_result)
-            html_report = next((r for r in reports if str(r).endswith(".html")), None)
-            if html_report:
-                status.update(f"[ готово ] Отчет сохранен: {html_report.name}")
-                from epitaph.reporting.dispatcher import open_in_viewer
-                opened = await asyncio.to_thread(open_in_viewer, html_report)
-                if opened:
-                    status.update(f"[ открыт ] Отчет открыт: {html_report.name}")
-            else:
-                status.update("[ готово ] Отчеты успешно сгенерированы")
+            report_path = await self.dispatcher.export_html(self._last_session_result)
+            short_path = str(report_path).replace(str(Path.home()), "~")
+            status.update(f"[ открыт ] Отчет открыт: {short_path}")
         except Exception as err:
-            status.update(f"[ сбой ] Ошибка сохранения HTML: {err}")
+            status.update(f"[ сбой ] Ошибка создания HTML: {err}")

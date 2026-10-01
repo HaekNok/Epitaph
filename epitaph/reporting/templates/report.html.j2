@@ -1019,7 +1019,7 @@
                       <span class="status-badge status-FOUND">FOUND</span>
                     </div>
                   </div>
-                  <div class="latency-badge" style="margin-top: 4px;">LATENCY: {{ "%.1f"|format(r.response_time_ms) }} ms // {{ r.execution_type }}</div>
+                  <div class="latency-badge" style="margin-top: 4px;">LATENCY: {{ "%.1f"|format(r.response_time_ms or 0.0) }} ms // {{ r.execution_type }}</div>
                   
                   <div class="platform-body" style="margin-top: 10px;">
                     {% if r.extracted_data %}
@@ -1077,7 +1077,7 @@
                     <td>{{ r.platform_name }}</td>
                     <td>{{ r.execution_type }}</td>
                     <td><span class="status-badge status-{{ r.status }}">{{ r.status }}</span></td>
-                    <td>{{ "%.1f"|format(r.response_time_ms) }} ms</td>
+                    <td>{{ "%.1f"|format(r.response_time_ms or 0.0) }} ms</td>
                   </tr>
                 {% endfor %}
               </tbody>
