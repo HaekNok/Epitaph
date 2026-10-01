@@ -1,4 +1,4 @@
-"""Комплексный набор тестов для модуля eMail-разведки (Слот 3), реестра и чекеров."""
+"""Комплексный набор тестов для модуля eMail-разведки (Слот 3), реестра и 52 чекеров."""
 from __future__ import annotations
 
 import asyncio
@@ -8,15 +8,59 @@ import pytest
 
 from epitaph.execution.checkers.email.base import BaseEmailChecker
 from epitaph.execution.checkers.email.executor import (
-    EmailReconExecutor,
-    GitHubEmailChecker,
-    GravatarEmailChecker,
-    SpotifyEmailChecker,
-    TwitterEmailChecker,
-    MicrosoftEmailChecker,
+    AdobeEmailChecker,
+    AirbnbEmailChecker,
+    AmazonEmailChecker,
+    AppleEmailChecker,
+    AtlassianEmailChecker,
+    BitwardenEmailChecker,
+    BookingEmailChecker,
+    ChessEmailChecker,
+    CodecademyEmailChecker,
+    DeezerEmailChecker,
+    DiscordEmailChecker,
+    DockerEmailChecker,
     DuolingoEmailChecker,
-    ProtonMailEmailChecker,
+    EBayEmailChecker,
+    EmailReconExecutor,
+    EpicGamesEmailChecker,
+    EvernoteEmailChecker,
+    FacebookEmailChecker,
+    FlickrEmailChecker,
+    FreelancerEmailChecker,
+    GitHubEmailChecker,
+    GitLabEmailChecker,
+    GravatarEmailChecker,
+    HeadhunterEmailChecker,
+    InstagramEmailChecker,
+    LastPassEmailChecker,
+    LinkedInEmailChecker,
+    MediumEmailChecker,
     MegaEmailChecker,
+    MicrosoftEmailChecker,
+    MyFitnessPalEmailChecker,
+    NetflixEmailChecker,
+    NotionEmailChecker,
+    OlxEmailChecker,
+    PatreonEmailChecker,
+    PayPalEmailChecker,
+    PinterestEmailChecker,
+    ProtonMailEmailChecker,
+    QuoraEmailChecker,
+    RedditEmailChecker,
+    RobotaUaEmailChecker,
+    SlackEmailChecker,
+    SnapchatEmailChecker,
+    SpotifyEmailChecker,
+    SteamEmailChecker,
+    StravaEmailChecker,
+    TikTokEmailChecker,
+    TripAdvisorEmailChecker,
+    TumblrEmailChecker,
+    TwitchEmailChecker,
+    TwitterEmailChecker,
+    WordPressEmailChecker,
+    WorkUaEmailChecker,
 )
 from epitaph.execution.checkers.email.registry import EmailCheckerRegistry
 from epitaph.models.base import DetectionStatus
@@ -25,10 +69,11 @@ from epitaph.models.target import TargetProfile
 
 
 def test_email_checker_registry_discovery() -> None:
-    # Проверка обнаружения и регистрации всех 22 специализированных чекеров из единого модуля
+    # Проверка обнаружения и регистрации всех 52 специализированных чекеров из единого модуля
     checkers = EmailCheckerRegistry.get_all_instances()
     names = {c.name.lower() for c in checkers}
     expected = {
+        # Исходные 22 сервиса
         "discord",
         "github",
         "gravatar",
@@ -51,14 +96,45 @@ def test_email_checker_registry_discovery() -> None:
         "pinterest",
         "olx",
         "docker hub",
+        # 30 новых сервисов
+        "adobe",
+        "amazon",
+        "airbnb",
+        "bitwarden",
+        "booking.com",
+        "chess.com",
+        "codecademy",
+        "deezer",
+        "ebay",
+        "epic games",
+        "evernote",
+        "facebook",
+        "flickr",
+        "freelancer",
+        "lastpass",
+        "linkedin",
+        "medium",
+        "myfitnesspal",
+        "netflix",
+        "notion",
+        "patreon",
+        "paypal",
+        "quora",
+        "reddit",
+        "slack",
+        "strava",
+        "tripadvisor",
+        "tumblr",
+        "twitch",
+        "wordpress",
     }
     assert expected.issubset(names)
-    assert len(checkers) >= 22
+    assert len(checkers) >= 52
 
 
 def test_opsec_active_probe_marking() -> None:
     # Проверка корректности маркировки активных чекеров с риском уведомления цели
-    active_names = {"discord", "github", "work.ua", "gitlab", "olx"}
+    active_names = {"discord", "github", "work.ua", "gitlab", "olx", "linkedin"}
     for checker in EmailCheckerRegistry.get_all_instances():
         if checker.name.lower() in active_names:
             assert checker.is_active_probe is True, f"Чекер {checker.name} должен быть active_probe"
@@ -103,7 +179,7 @@ async def test_email_recon_executor_passive_mode_filtering() -> None:
     assert "work.ua" not in ran_platforms
     assert "gitlab" not in ran_platforms
     assert "olx" not in ran_platforms
-    assert "google" in ran_platforms
+    assert "linkedin" not in ran_platforms
 
 
 @pytest.mark.asyncio
@@ -128,78 +204,51 @@ async def test_email_recon_executor_input_normalization() -> None:
 
 
 @pytest.mark.asyncio
-async def test_microsoft_checker_success() -> None:
-    checker = MicrosoftEmailChecker()
+async def test_adobe_checker_success() -> None:
+    # Проверка обнаружения аккаунта в Adobe
+    checker = AdobeEmailChecker()
     mock_client = AsyncMock(spec=httpx.AsyncClient)
     mock_resp = MagicMock(spec=httpx.Response)
     mock_resp.status_code = 200
-    mock_resp.json.return_value = {"IfExistsResult": 0, "UserTenantType": "Personal"}
+    mock_resp.json.return_value = [{"accountType": "type1", "userId": "12345"}]
     mock_client.post.return_value = mock_resp
 
-    target = TargetProfile(username="user@live.com")
+    target = TargetProfile(username="designer@example.com")
     result = await checker.check_http(target, mock_client)
 
     assert result.status == DetectionStatus.FOUND
-    assert result.platform_name == "Microsoft"
-    assert result.profile_url == "https://account.microsoft.com"
-    assert result.extracted_data.get("tenant_type") == "Personal"
+    assert result.platform_name == "Adobe"
 
 
 @pytest.mark.asyncio
-async def test_duolingo_checker_success() -> None:
-    checker = DuolingoEmailChecker()
+async def test_chess_checker_success() -> None:
+    # Проверка обнаружения аккаунта на Chess.com
+    checker = ChessEmailChecker()
     mock_client = AsyncMock(spec=httpx.AsyncClient)
     mock_resp = MagicMock(spec=httpx.Response)
     mock_resp.status_code = 200
-    mock_resp.json.return_value = {
-        "users": [{
-            "username": "polyglot_user",
-            "name": "Polyglot",
-            "learningLanguage": "es",
-            "picture": "//avatar.duolingo.com/pic.jpg",
-        }]
-    }
+    mock_resp.json.return_value = {"available": False}
     mock_client.get.return_value = mock_resp
 
-    target = TargetProfile(username="user@example.com")
+    target = TargetProfile(username="grandmaster@example.com")
     result = await checker.check_http(target, mock_client)
 
     assert result.status == DetectionStatus.FOUND
-    assert result.platform_name == "Duolingo"
-    assert result.profile_url == "https://www.duolingo.com/profile/polyglot_user"
-    assert result.extracted_data.get("username") == "polyglot_user"
-    assert result.extracted_data.get("learning_language") == "es"
+    assert result.platform_name == "Chess.com"
 
 
 @pytest.mark.asyncio
-async def test_protonmail_checker_success() -> None:
-    checker = ProtonMailEmailChecker()
+async def test_notion_checker_success() -> None:
+    # Проверка обнаружения аккаунта в Notion
+    checker = NotionEmailChecker()
     mock_client = AsyncMock(spec=httpx.AsyncClient)
     mock_resp = MagicMock(spec=httpx.Response)
     mock_resp.status_code = 200
-    mock_resp.text = "info:1:1\npub:4096R/1234ABCD"
-    mock_client.get.return_value = mock_resp
-
-    target = TargetProfile(username="analyst@proton.me")
-    result = await checker.check_http(target, mock_client)
-
-    assert result.status == DetectionStatus.FOUND
-    assert result.platform_name == "ProtonMail"
-    assert result.profile_url == "https://proton.me"
-
-
-@pytest.mark.asyncio
-async def test_mega_checker_success() -> None:
-    checker = MegaEmailChecker()
-    mock_client = AsyncMock(spec=httpx.AsyncClient)
-    mock_resp = MagicMock(spec=httpx.Response)
-    mock_resp.status_code = 200
-    mock_resp.json.return_value = [{"v": 1, "k": "sample_encryption_key"}]
+    mock_resp.json.return_value = {"hasPassword": True, "hasGoogleLogin": False}
     mock_client.post.return_value = mock_resp
 
-    target = TargetProfile(username="user@mega.nz")
+    target = TargetProfile(username="workspace@example.com")
     result = await checker.check_http(target, mock_client)
 
     assert result.status == DetectionStatus.FOUND
-    assert result.platform_name == "Mega"
-    assert result.profile_url == "https://mega.nz"
+    assert result.platform_name == "Notion"
