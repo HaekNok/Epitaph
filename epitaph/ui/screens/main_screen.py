@@ -15,8 +15,23 @@ from epitaph.core.events import (
     ProgressUpdateEvent,
     ScanCompletedEvent,
 )
+from epitaph.execution.nickname import NicknameExecutor
+from epitaph.execution.checkers.bank_card import BankCardExecutor
+from epitaph.execution.checkers.cookies import CookieExecutor
 from epitaph.execution.checkers.email.executor import EmailReconExecutor
-from epitaph.execution.maigret import MaigretExecutor
+from epitaph.execution.checkers.fullname import FullNameExecutor
+from epitaph.execution.checkers.inn import InnExecutor
+from epitaph.execution.checkers.ip import IpExecutor
+from epitaph.execution.checkers.mac import MacExecutor
+from epitaph.execution.checkers.organization import OrganizationExecutor
+from epitaph.execution.checkers.password import PasswordExecutor
+from epitaph.execution.checkers.phone import PhoneExecutor
+from epitaph.execution.checkers.port_scanner import PortScannerExecutor
+from epitaph.execution.checkers.snils import SnilsExecutor
+from epitaph.execution.checkers.subdomain import SubdomainExecutor
+from epitaph.execution.checkers.telegram import TelegramExecutor
+from epitaph.execution.checkers.vehicle import VehicleExecutor
+
 from epitaph.models.result import ScanSessionResult
 from epitaph.models.target import TargetProfile
 from epitaph.ui.widgets.banner import HeaderBanner
@@ -41,6 +56,25 @@ SLOT_TITLES: dict[int, str] = {
     16: "MAC Address",
 }
 
+SLOT_CONFIGS: dict[int, dict[str, str]] = {
+    1: {"prompt": "Target Nickname > ", "placeholder": "введите никнейм цели или 'q' для выхода...", "title": "Nickname"},
+    2: {"prompt": "Target Telegram > ", "placeholder": "введите username (@target) или t.me/target...", "title": "Telegram ID"},
+    3: {"prompt": "Target Email > ", "placeholder": "введите email (например, target@gmail.com)...", "title": "Email Address"},
+    4: {"prompt": "Target Phone > ", "placeholder": "введите номер телефона (+380... / +7...)...", "title": "Phone Number"},
+    5: {"prompt": "Target Full Name > ", "placeholder": "введите Фамилию Имя Отчество...", "title": "Full Name"},
+    6: {"prompt": "Target INN > ", "placeholder": "введите ИНН (10 или 12 цифр)...", "title": "INN"},
+    7: {"prompt": "Target SNILS > ", "placeholder": "введите СНИЛС (11 цифр)...", "title": "SNILS"},
+    8: {"prompt": "Target Car / VIN > ", "placeholder": "введите госномер или 17-значный VIN...", "title": "Car Number"},
+    9: {"prompt": "Target Organization > ", "placeholder": "введите ОГРН или наименование...", "title": "Organization"},
+    10: {"prompt": "Target Bank Card > ", "placeholder": "введите номер карты или BIN...", "title": "Bank Card"},
+    11: {"prompt": "Target Password > ", "placeholder": "введите пароль для k-Anonymity проверки...", "title": "Password"},
+    12: {"prompt": "Target Cookies > ", "placeholder": "вставьте строку куки (Netscape/JSON)...", "title": "Cookies"},
+    13: {"prompt": "Target IP > ", "placeholder": "введите IPv4 или IPv6 адрес...", "title": "IP Address"},
+    14: {"prompt": "Target Subdomain > ", "placeholder": "введите домен (example.com)...", "title": "Subdomain"},
+    15: {"prompt": "Target Port Host > ", "placeholder": "введите хост для проверки TCP-портов...", "title": "Port Scanner"},
+    16: {"prompt": "Target MAC > ", "placeholder": "введите MAC-адрес (XX:XX:XX:XX:XX:XX)...", "title": "MAC Address"},
+}
+
 
 class MainScreen(Screen[None]):
     BINDINGS = [
@@ -51,13 +85,30 @@ class MainScreen(Screen[None]):
     def __init__(self) -> None:
         super().__init__()
         self.event_queue: asyncio.Queue[Any] = asyncio.Queue()
-        self.maigret_executor = MaigretExecutor(event_queue=self.event_queue)
-        self.engine = self.maigret_executor.engine
-        self.email_executor = EmailReconExecutor(
-            event_queue=self.event_queue,
-            engine=self.engine,
-            dispatcher=self.engine.dispatcher,
-        )
+        self.nickname_executor = NicknameExecutor(event_queue=self.event_queue)
+        self.engine = self.nickname_executor.engine
+        self.dispatcher = self.engine.dispatcher
+
+        # Реестр всех 16 специализированных исполнителей функциональной матрицы
+        self._executors: dict[int, Any] = {
+            1: self.nickname_executor,
+            2: TelegramExecutor(event_queue=self.event_queue, engine=self.engine, dispatcher=self.dispatcher),
+            3: EmailReconExecutor(event_queue=self.event_queue, engine=self.engine, dispatcher=self.dispatcher),
+            4: PhoneExecutor(event_queue=self.event_queue, engine=self.engine, dispatcher=self.dispatcher),
+            5: FullNameExecutor(event_queue=self.event_queue, engine=self.engine, dispatcher=self.dispatcher),
+            6: InnExecutor(event_queue=self.event_queue, engine=self.engine, dispatcher=self.dispatcher),
+            7: SnilsExecutor(event_queue=self.event_queue, engine=self.engine, dispatcher=self.dispatcher),
+            8: VehicleExecutor(event_queue=self.event_queue, engine=self.engine, dispatcher=self.dispatcher),
+            9: OrganizationExecutor(event_queue=self.event_queue, engine=self.engine, dispatcher=self.dispatcher),
+            10: BankCardExecutor(event_queue=self.event_queue, engine=self.engine, dispatcher=self.dispatcher),
+            11: PasswordExecutor(event_queue=self.event_queue, engine=self.engine, dispatcher=self.dispatcher),
+            12: CookieExecutor(event_queue=self.event_queue, engine=self.engine, dispatcher=self.dispatcher),
+            13: IpExecutor(event_queue=self.event_queue, engine=self.engine, dispatcher=self.dispatcher),
+            14: SubdomainExecutor(event_queue=self.event_queue, engine=self.engine, dispatcher=self.dispatcher),
+            15: PortScannerExecutor(event_queue=self.event_queue, engine=self.engine, dispatcher=self.dispatcher),
+            16: MacExecutor(event_queue=self.event_queue, engine=self.engine, dispatcher=self.dispatcher),
+        }
+
         self._is_scanning: bool = False
         self._selected_slot: Optional[int] = None
         self._last_session_result: Optional[ScanSessionResult] = None
@@ -91,7 +142,7 @@ class MainScreen(Screen[None]):
                 with Horizontal(id="command_bar"):
                     yield Static("Command / Slot > ", id="prompt_label")
                     yield Input(
-                        placeholder="введите номер (1-30) или никнейм/email цели...",
+                        placeholder="введите номер (1-30) или запрос цели...",
                         id="command_input",
                     )
 
@@ -160,26 +211,16 @@ class MainScreen(Screen[None]):
         prompt = self.query_one("#prompt_label", Static)
         status = self.query_one("#status_message", Static)
 
-        if slot == 1:
-            self._selected_slot = 1
-            prompt.update("Target Nickname > ")
-            status.update("[ выбор ] Модуль 1 > Nickname активен. Введите никнейм цели...")
-            cmd_input.placeholder = "введите целевой никнейм или 'q' для выхода..."
-        elif slot == 3:
-            self._selected_slot = 3
-            prompt.update("Target Email > ")
-            status.update("[ выбор ] Модуль 3 > Email Address активен. Введите email цели...")
-            cmd_input.placeholder = "введите email (например, target@gmail.com)..."
-        elif slot in SLOT_TITLES:
-            self._selected_slot = None
-            title = SLOT_TITLES[slot]
-            prompt.update("Command / Slot > ")
-            status.update(f"[ заглушка ] Слот {slot} > {title} (модуль в разработке)")
-            cmd_input.placeholder = "введите номер слота (1-30) или 'q' для выхода..."
+        if slot in SLOT_CONFIGS:
+            self._selected_slot = slot
+            cfg = SLOT_CONFIGS[slot]
+            prompt.update(cfg["prompt"])
+            status.update(f"[ выбор ] Модуль {slot} > {cfg['title']} активен. Введите данные цели...")
+            cmd_input.placeholder = cfg["placeholder"]
         else:
             self._selected_slot = None
             prompt.update("Command / Slot > ")
-            status.update(f"[ заглушка ] Слот {slot} > SOON (модуль в разработке)")
+            status.update(f"[ заглушка ] Слот {slot} > SOON (модуль в резерве)")
             cmd_input.placeholder = "введите номер слота (1-30) или 'q' для выхода..."
 
         cmd_input.focus()
@@ -217,18 +258,27 @@ class MainScreen(Screen[None]):
             status.update("[ ошибка ] Сканирование уже выполняется...")
             return
 
-        status.update("[ ожидание ] Запрос обрабатывается")
-        target = TargetProfile(username=raw)
-        is_email = (self._selected_slot == 3) or ("@" in raw)
-        asyncio.create_task(self._execute_scan(target, is_email=is_email))
+        # Автоматическое определение слота при отсутствии явного выбора
+        slot = self._selected_slot
+        if slot is None:
+            if "@" in raw:
+                slot = 3
+            elif raw.startswith("+") or (raw.isdigit() and len(raw) in (10, 11, 12)):
+                slot = 4 if len(raw) <= 12 and not raw.isdigit() else (6 if len(raw) in (10, 12) else 1)
+            else:
+                slot = 1
 
-    async def _execute_scan(self, target: TargetProfile, is_email: bool = False) -> None:
+        status.update("[ ожидание ] Запрос обрабатывается...")
+        target = TargetProfile(username=raw)
+        asyncio.create_task(self._execute_scan(target, slot=slot))
+
+    async def _execute_scan(self, target: TargetProfile, slot: int = 1) -> None:
         self._is_scanning = True
         status = self.query_one("#status_message", Static)
         save_btn = self.query_one("#save_html_button", Button)
         save_btn.display = False
 
-        executor = self.email_executor if is_email else self.maigret_executor
+        executor = self._executors.get(slot, self.nickname_executor)
         scan_task = asyncio.create_task(executor.run_search(target))
 
         while not scan_task.done() or not self.event_queue.empty():
@@ -251,9 +301,9 @@ class MainScreen(Screen[None]):
         try:
             self._last_session_result = await scan_task
             found = self._last_session_result.found_count
-            mode_label = "Email" if is_email else "Nickname"
+            cfg = SLOT_CONFIGS.get(slot, {"title": "Scan"})
             status.update(
-                f"[ готово ] {mode_label} {self._last_session_result.session_id} | Найдено: {found} | Нажмите '> сохранить HTML'"
+                f"[ готово ] {cfg['title']} {self._last_session_result.session_id} | Результатов: {found} | Нажмите '> сохранить HTML'"
             )
             save_btn.display = True
         except Exception as err:
@@ -262,15 +312,22 @@ class MainScreen(Screen[None]):
             self._is_scanning = False
 
     async def action_save_html(self) -> None:
-        status = self.query_one("#status_message", Static)
         if self._last_session_result is None:
-            status.update("[ ошибка ] Нет данных предыдущего сканирования")
+            self.query_one("#status_message", Static).update("[ ошибка ] Нет результатов для экспорта")
             return
 
-        status.update("[ ожидание ] Экспорт и открытие HTML-отчета...")
+        status = self.query_one("#status_message", Static)
+        status.update("[ экспорт ] Генерация HTML отчета...")
         try:
-            report_path = await self.engine.dispatcher.export_html(self._last_session_result)
-            short_path = str(report_path).replace(str(Path.home()), "~")
-            status.update(f"[ открыт ] {short_path}")
+            reports = await self.dispatcher.export_all(self._last_session_result)
+            html_report = next((r for r in reports if str(r).endswith(".html")), None)
+            if html_report:
+                status.update(f"[ готово ] Отчет сохранен: {html_report.name}")
+                from epitaph.reporting.dispatcher import open_in_viewer
+                opened = await asyncio.to_thread(open_in_viewer, html_report)
+                if opened:
+                    status.update(f"[ открыт ] Отчет открыт: {html_report.name}")
+            else:
+                status.update("[ готово ] Отчеты успешно сгенерированы")
         except Exception as err:
-            status.update(f"[ сбой ] Ошибка создания HTML: {err}")
+            status.update(f"[ сбой ] Ошибка сохранения HTML: {err}")
