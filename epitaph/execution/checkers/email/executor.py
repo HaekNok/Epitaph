@@ -3577,6 +3577,428 @@ class WordPressEmailChecker(BaseEmailChecker):
 # Оркестратор EmailReconExecutor
 # ==============================================================================
 
+
+@EmailCheckerRegistry.register("bitbucket")
+class BitbucketEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи Bitbucket / Atlassian Cloud по email."""
+    @property
+    def name(self) -> str:
+        return "Bitbucket"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://id.atlassian.com/rest/check-username"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://id.atlassian.com",
+            "Referer": "https://id.atlassian.com/login",
+        })
+        payload = {"username": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("accountExists") is True or data.get("exists") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://bitbucket.org",
+                    )
+                if data.get("accountExists") is False or data.get("exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code == 404:
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.NOT_FOUND,
+                response_time_ms=elapsed_ms,
+                http_status_code=404,
+            )
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Bitbucket Atlassian API",
+        )
+
+
+@EmailCheckerRegistry.register("soundcloud")
+class SoundCloudEmailChecker(BaseEmailChecker):
+    """Проверка регистрации музыкального профиля на платформе SoundCloud по email."""
+    @property
+    def name(self) -> str:
+        return "SoundCloud"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://api-auth.soundcloud.com/web-auth/identifier"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://soundcloud.com",
+            "Referer": "https://soundcloud.com/signin",
+        })
+        payload = {"identifier": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                status_val = str(data.get("status", "")).lower()
+                auth_method = str(data.get("auth_method", "")).lower()
+                if "existing" in status_val or "password" in auth_method or data.get("exists") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://soundcloud.com",
+                    )
+                if "new" in status_val or data.get("exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code == 404:
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.NOT_FOUND,
+                response_time_ms=elapsed_ms,
+                http_status_code=404,
+            )
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ SoundCloud Auth API",
+        )
+
+
+@EmailCheckerRegistry.register("imgur")
+class ImgurEmailChecker(BaseEmailChecker):
+    """Проверка доступности регистрации email на фотохостинге Imgur."""
+    @property
+    def name(self) -> str:
+        return "Imgur"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://imgur.com/signin/ajax_email_available"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Origin": "https://imgur.com",
+            "Referer": "https://imgur.com/register",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, data=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                is_available = data.get("data", {}).get("available")
+                if is_available is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://imgur.com",
+                    )
+                if is_available is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Imgur AJAX API",
+        )
+
+
+
+@EmailCheckerRegistry.register("yahoo")
+class YahooEmailChecker(BaseEmailChecker):
+    """Проверка наличия почтового ящика или аккаунта в экосистеме Yahoo."""
+    @property
+    def name(self) -> str:
+        return "Yahoo"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://login.yahoo.com/account/module/create/check"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://login.yahoo.com",
+            "Referer": "https://login.yahoo.com/account/create",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"name": "userId", "value": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                errors = data.get("errors", [])
+                err_codes = [str(e.get("error", "")).upper() for e in errors if isinstance(e, dict)]
+                if any("EXISTS" in c or "IDENTIFIER_EXISTS" in c or "TAKEN" in c for c in err_codes):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://mail.yahoo.com",
+                    )
+                if not errors or any("VALID" in c for c in err_codes):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Yahoo Account API",
+        )
+
+
+@EmailCheckerRegistry.register("samsung")
+class SamsungEmailChecker(BaseEmailChecker):
+    """Проверка регистрации учетной записи в экосистеме Samsung Account."""
+    @property
+    def name(self) -> str:
+        return "Samsung"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://api.account.samsung.com/account/check/v1/email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://account.samsung.com",
+            "Referer": "https://account.samsung.com/membership/intro",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                is_avail = data.get("isAvailable")
+                result_str = str(data.get("result", "")).upper()
+                if is_avail is False or "EXIST" in result_str or data.get("userExists") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://account.samsung.com",
+                    )
+                if is_avail is True or "NOT_EXIST" in result_str or data.get("userExists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code == 404:
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.NOT_FOUND,
+                response_time_ms=elapsed_ms,
+                http_status_code=404,
+            )
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Samsung Account API",
+        )
+
+
+@EmailCheckerRegistry.register("binance")
+class BinanceEmailChecker(BaseEmailChecker):
+    """Проверка наличия профиля на криптовалютной платформе Binance по email."""
+    @property
+    def name(self) -> str:
+        return "Binance"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://www.binance.com/bapi/accounts/v1/public/authcenter/auth/pre-check"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "clienttype": "web",
+            "Origin": "https://accounts.binance.com",
+            "Referer": "https://accounts.binance.com/login",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("success") is True:
+                    payload_data = data.get("data", {})
+                    if payload_data.get("userExists") is True or payload_data.get("registered") is True:
+                        return self.create_result(
+                            target=target,
+                            status=DetectionStatus.FOUND,
+                            response_time_ms=elapsed_ms,
+                            http_status_code=200,
+                            profile_url="https://www.binance.com",
+                        )
+                    if payload_data.get("userExists") is False or payload_data.get("registered") is False:
+                        return self.create_result(
+                            target=target,
+                            status=DetectionStatus.NOT_FOUND,
+                            response_time_ms=elapsed_ms,
+                            http_status_code=200,
+                        )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Binance Auth API",
+        )
+
+
 class EmailReconExecutor:
     """Оркестратор параллельной проверки eMail через Google и сервис-чекеры."""
 

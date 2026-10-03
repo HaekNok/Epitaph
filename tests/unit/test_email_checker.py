@@ -9,6 +9,10 @@ import pytest
 from epitaph.execution.checkers.email.base import BaseEmailChecker
 from epitaph.execution.checkers.email.executor import (
     AdobeEmailChecker,
+    BinanceEmailChecker,
+    BitbucketEmailChecker,
+    ImgurEmailChecker,
+    SoundCloudEmailChecker,
     AirbnbEmailChecker,
     AmazonEmailChecker,
     AppleEmailChecker,
@@ -60,6 +64,8 @@ from epitaph.execution.checkers.email.executor import (
     TwitchEmailChecker,
     TwitterEmailChecker,
     WordPressEmailChecker,
+    SamsungEmailChecker,
+    YahooEmailChecker,
     WorkUaEmailChecker,
 )
 from epitaph.execution.checkers.email.registry import EmailCheckerRegistry
@@ -127,9 +133,15 @@ def test_email_checker_registry_discovery() -> None:
         "tumblr",
         "twitch",
         "wordpress",
+        "bitbucket",
+        "soundcloud",
+        "imgur",
+        "yahoo",
+        "samsung",
+        "binance",
     }
     assert expected.issubset(names)
-    assert len(checkers) >= 52
+    assert len(checkers) >= 58
 
 
 def test_opsec_active_probe_marking() -> None:
@@ -252,3 +264,69 @@ async def test_notion_checker_success() -> None:
 
     assert result.status == DetectionStatus.FOUND
     assert result.platform_name == "Notion"
+
+@pytest.mark.asyncio
+async def test_bitbucket_checker_success() -> None:
+    # Проверка обнаружения аккаунта в Bitbucket
+    checker = BitbucketEmailChecker()
+    mock_client = AsyncMock(spec=httpx.AsyncClient)
+    mock_resp = MagicMock(spec=httpx.Response)
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"accountExists": True}
+    mock_client.post.return_value = mock_resp
+
+    target = TargetProfile(username="developer@example.com")
+    result = await checker.check_http(target, mock_client)
+
+    assert result.status == DetectionStatus.FOUND
+    assert result.platform_name == "Bitbucket"
+
+
+@pytest.mark.asyncio
+async def test_soundcloud_checker_success() -> None:
+    # Проверка обнаружения профиля в SoundCloud
+    checker = SoundCloudEmailChecker()
+    mock_client = AsyncMock(spec=httpx.AsyncClient)
+    mock_resp = MagicMock(spec=httpx.Response)
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"status": "existing_user", "auth_method": "password"}
+    mock_client.post.return_value = mock_resp
+
+    target = TargetProfile(username="musician@example.com")
+    result = await checker.check_http(target, mock_client)
+
+    assert result.status == DetectionStatus.FOUND
+    assert result.platform_name == "SoundCloud"
+
+@pytest.mark.asyncio
+async def test_binance_checker_success() -> None:
+    # Проверка обнаружения аккаунта на бирже Binance
+    checker = BinanceEmailChecker()
+    mock_client = AsyncMock(spec=httpx.AsyncClient)
+    mock_resp = MagicMock(spec=httpx.Response)
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"success": True, "data": {"userExists": True}}
+    mock_client.post.return_value = mock_resp
+
+    target = TargetProfile(username="trader@example.com")
+    result = await checker.check_http(target, mock_client)
+
+    assert result.status == DetectionStatus.FOUND
+    assert result.platform_name == "Binance"
+
+
+@pytest.mark.asyncio
+async def test_samsung_checker_success() -> None:
+    # Проверка обнаружения аккаунта в Samsung
+    checker = SamsungEmailChecker()
+    mock_client = AsyncMock(spec=httpx.AsyncClient)
+    mock_resp = MagicMock(spec=httpx.Response)
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"isAvailable": False}
+    mock_client.post.return_value = mock_resp
+
+    target = TargetProfile(username="galaxy@example.com")
+    result = await checker.check_http(target, mock_client)
+
+    assert result.status == DetectionStatus.FOUND
+    assert result.platform_name == "Samsung"
