@@ -35,6 +35,3 @@ reports/
 .idea/
 .DS_Store
 Thumbs.db
-
-# Внутренний контекстный манифест и архитектурные заметки (OPSEC & Repository Hygiene)
-context*.txt
