@@ -3999,6 +3999,3681 @@ class BinanceEmailChecker(BaseEmailChecker):
         )
 
 
+
+@EmailCheckerRegistry.register("dropbox")
+class DropboxEmailChecker(BaseEmailChecker):
+    """Проверка регистрации аккаунта облачного хранилища Dropbox по email."""
+    @property
+    def name(self) -> str:
+        return "Dropbox"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://www.dropbox.com/ajax_verify_email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Origin": "https://www.dropbox.com",
+            "Referer": "https://www.dropbox.com/login",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, content=urlencode(payload), headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("exists") is True or data.get("msg") == "exists" or data.get("user_exists") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.dropbox.com",
+                    )
+                if data.get("exists") is False or data.get("is_available") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Dropbox Verify API",
+        )
+
+
+@EmailCheckerRegistry.register("shopify")
+class ShopifyEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи в экосистеме электронной коммерции Shopify."""
+    @property
+    def name(self) -> str:
+        return "Shopify"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://accounts.shopify.com/lookup"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://accounts.shopify.com",
+            "Referer": "https://accounts.shopify.com/lookup",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                lookup_res = str(data.get("lookup_result", "")).lower()
+                account_exists = data.get("account_exists")
+                if "account_exists" in lookup_res or account_exists is True or data.get("exists") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://accounts.shopify.com",
+                    )
+                if "account_not_found" in lookup_res or account_exists is False or data.get("exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Shopify Accounts API",
+        )
+
+
+@EmailCheckerRegistry.register("asana")
+class AsanaEmailChecker(BaseEmailChecker):
+    """Проверка регистрации корпоративного аккаунта или пользователя в платформе Asana."""
+    @property
+    def name(self) -> str:
+        return "Asana"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://app.asana.com/-/login_lookup"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://app.asana.com",
+            "Referer": "https://app.asana.com/-/login",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"data": {"email": email}}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json().get("data", {})
+                if data.get("user_exists") is True or "auth_options" in data:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://app.asana.com",
+                    )
+                if data.get("user_exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Asana Lookup API",
+        )
+
+
+
+@EmailCheckerRegistry.register("canva")
+class CanvaEmailChecker(BaseEmailChecker):
+    """Проверка наличия профиля или учетной записи в дизайн-платформе Canva."""
+    @property
+    def name(self) -> str:
+        return "Canva"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://www.canva.com/_ajax/users/lookup"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://www.canva.com",
+            "Referer": "https://www.canva.com/login",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("user_exists") is True or data.get("status") == "taken" or data.get("exists") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.canva.com",
+                    )
+                if data.get("user_exists") is False or data.get("status") == "available" or data.get("exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Canva Users Lookup API",
+        )
+
+
+@EmailCheckerRegistry.register("vimeo")
+class VimeoEmailChecker(BaseEmailChecker):
+    """Проверка регистрации учетной записи видеоплатформы Vimeo по email."""
+    @property
+    def name(self) -> str:
+        return "Vimeo"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://vimeo.com/_ajax/signup/verify_email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Origin": "https://vimeo.com",
+            "Referer": "https://vimeo.com/join",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, content=urlencode(payload), headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                msg = str(data.get("message", "")).lower()
+                status = str(data.get("status", "")).lower()
+                if (status == "fail" and ("already" in msg or "exists" in msg or "taken" in msg)) or data.get("exists") is True or data.get("in_use") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://vimeo.com",
+                    )
+                if status == "success" or data.get("exists") is False or data.get("is_valid") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Vimeo Verify API",
+        )
+
+
+@EmailCheckerRegistry.register("coinbase")
+class CoinbaseEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи криптовалютной биржи Coinbase."""
+    @property
+    def name(self) -> str:
+        return "Coinbase"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://www.coinbase.com/api/v2/users/lookup"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://www.coinbase.com",
+            "Referer": "https://www.coinbase.com/signin",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                payload_data = data.get("data", {})
+                if payload_data.get("exists") is True or payload_data.get("has_account") is True or data.get("user_exists") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.coinbase.com",
+                    )
+                if payload_data.get("exists") is False or payload_data.get("has_account") is False or data.get("user_exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Coinbase Lookup API",
+        )
+
+
+
+@EmailCheckerRegistry.register("tradingview")
+class TradingViewEmailChecker(BaseEmailChecker):
+    """Проверка наличия профиля или учетной записи на финансово-аналитической платформе TradingView."""
+    @property
+    def name(self) -> str:
+        return "TradingView"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://www.tradingview.com/accounts/check/"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Origin": "https://www.tradingview.com",
+            "Referer": "https://www.tradingview.com/",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, content=urlencode(payload), headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("email_exists") is True or "email_exists" in str(data).lower():
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.tradingview.com",
+                    )
+                if data.get("email_exists") is False or data.get("valid") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ TradingView Accounts API",
+        )
+
+
+@EmailCheckerRegistry.register("zoom")
+class ZoomEmailChecker(BaseEmailChecker):
+    """Проверка регистрации учетной записи в сервисе видеоконференций Zoom."""
+    @property
+    def name(self) -> str:
+        return "Zoom"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://zoom.us/rest/check_email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Origin": "https://zoom.us",
+            "Referer": "https://zoom.us/signin",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, content=urlencode(payload), headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                result = str(data.get("result", "")).upper()
+                if data.get("existed") is True or result == "EXISTED" or data.get("status") == "existed":
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://zoom.us",
+                    )
+                if data.get("existed") is False or result in ("NOT_EXISTED", "NOT_EXIST") or data.get("status") == "not_existed":
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Zoom Check Email API",
+        )
+
+
+@EmailCheckerRegistry.register("figma")
+class FigmaEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи в облачной платформе дизайна Figma."""
+    @property
+    def name(self) -> str:
+        return "Figma"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://www.figma.com/api/user/lookup"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://www.figma.com",
+            "Referer": "https://www.figma.com/login",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                meta = data.get("meta", {}) if isinstance(data.get("meta"), dict) else {}
+                if data.get("exists") is True or meta.get("exists") is True or data.get("user_exists") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.figma.com",
+                    )
+                if data.get("exists") is False or meta.get("exists") is False or data.get("user_exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Figma User Lookup API",
+        )
+
+
+
+@EmailCheckerRegistry.register("grammarly")
+class GrammarlyEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи в сервисе ассистента письма Grammarly."""
+    @property
+    def name(self) -> str:
+        return "Grammarly"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://auth.grammarly.com/v3/api/user/or-create"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://www.grammarly.com",
+            "Referer": "https://www.grammarly.com/signin",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("isNewUser") is False or data.get("user_exists") is True or data.get("hasPassword") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://app.grammarly.com",
+                    )
+                if data.get("isNewUser") is True or data.get("user_exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Grammarly Auth API",
+        )
+
+
+@EmailCheckerRegistry.register("deliveroo")
+class DeliverooEmailChecker(BaseEmailChecker):
+    """Проверка регистрации аккаунта сервиса доставки еды Deliveroo."""
+    @property
+    def name(self) -> str:
+        return "Deliveroo"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://deliveroo.co.uk/api/v1/users/check"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://deliveroo.co.uk",
+            "Referer": "https://deliveroo.co.uk/login",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("registered") is True or data.get("exists") is True or data.get("registered_user") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://deliveroo.co.uk",
+                    )
+                if data.get("registered") is False or data.get("exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Deliveroo Check API",
+        )
+
+
+@EmailCheckerRegistry.register("replit")
+class ReplitEmailChecker(BaseEmailChecker):
+    """Проверка наличия профиля разработчика на облачной платформе Replit."""
+    @property
+    def name(self) -> str:
+        return "Replit"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://replit.com/api/v1/internal/users/check-email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://replit.com",
+            "Referer": "https://replit.com/login",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("exists") is True or data.get("isAvailable") is False or data.get("user_exists") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://replit.com",
+                    )
+                if data.get("exists") is False or data.get("isAvailable") is True or data.get("user_exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Replit Users Check API",
+        )
+
+
+
+@EmailCheckerRegistry.register("kick")
+class KickEmailChecker(BaseEmailChecker):
+    """Проверка наличия профиля или учетной записи на стриминговой платформе Kick."""
+    @property
+    def name(self) -> str:
+        return "Kick"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://kick.com/api/v1/signup/verify/email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://kick.com",
+            "Referer": "https://kick.com",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("is_available") is False or data.get("taken") is True or "taken" in str(data.get("error", "")).lower() or data.get("exists") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://kick.com",
+                    )
+                if data.get("is_available") is True or data.get("taken") is False or data.get("exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Kick Verify Email API",
+        )
+
+
+@EmailCheckerRegistry.register("vercel")
+class VercelEmailChecker(BaseEmailChecker):
+    """Проверка регистрации учетной записи в облачной платформе Vercel."""
+    @property
+    def name(self) -> str:
+        return "Vercel"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://api.vercel.com/registration/verify"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://vercel.com",
+            "Referer": "https://vercel.com/signup",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("exists") is True or data.get("registered") is True or "user_already_exists" in str(data).lower():
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://vercel.com",
+                    )
+                if data.get("exists") is False or data.get("registered") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Vercel Registration API",
+        )
+
+
+@EmailCheckerRegistry.register("bandcamp")
+class BandcampEmailChecker(BaseEmailChecker):
+    """Проверка наличия профиля или учетной записи на музыкальной платформе Bandcamp."""
+    @property
+    def name(self) -> str:
+        return "Bandcamp"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://bandcamp.com/api/fan_signup/1/check_email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Origin": "https://bandcamp.com",
+            "Referer": "https://bandcamp.com/signup",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, content=urlencode(payload), headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("error") == "email_taken" or data.get("taken") is True or data.get("exists") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://bandcamp.com",
+                    )
+                if data.get("ok") is True or data.get("error") is None or data.get("exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Bandcamp Check Email API",
+        )
+
+
+
+@EmailCheckerRegistry.register("postman")
+class PostmanEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи разработчика в платформе Postman."""
+    @property
+    def name(self) -> str:
+        return "Postman"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://identity.getpostman.com/api/v1/users/lookup"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://identity.getpostman.com",
+            "Referer": "https://identity.getpostman.com/login",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("user_exists") is True or data.get("exists") is True or data.get("has_account") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.postman.com",
+                    )
+                if data.get("user_exists") is False or data.get("exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Postman Identity API",
+        )
+
+
+@EmailCheckerRegistry.register("mailchimp")
+class MailchimpEmailChecker(BaseEmailChecker):
+    """Проверка регистрации учетной записи в маркетинговой платформе Mailchimp."""
+    @property
+    def name(self) -> str:
+        return "Mailchimp"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://login.mailchimp.com/signup/check-email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Origin": "https://login.mailchimp.com",
+            "Referer": "https://login.mailchimp.com/signup/",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, content=urlencode(payload), headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("taken") is True or data.get("status") == "taken" or data.get("exists") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://mailchimp.com",
+                    )
+                if data.get("taken") is False or data.get("status") == "available" or data.get("exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Mailchimp Check Email API",
+        )
+
+
+@EmailCheckerRegistry.register("stripe")
+class StripeEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи платежной платформы Stripe."""
+    @property
+    def name(self) -> str:
+        return "Stripe"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://dashboard.stripe.com/ajax/user/lookup"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://dashboard.stripe.com",
+            "Referer": "https://dashboard.stripe.com/login",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("has_account") is True or data.get("exists") is True or data.get("user_exists") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://dashboard.stripe.com",
+                    )
+                if data.get("has_account") is False or data.get("exists") is False or data.get("user_exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Stripe User Lookup API",
+        )
+
+
+
+@EmailCheckerRegistry.register("hubspot")
+class HubSpotEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи в CRM-платформе HubSpot."""
+    @property
+    def name(self) -> str:
+        return "HubSpot"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://api.hubspot.com/login-api/v1/lookup"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://app.hubspot.com",
+            "Referer": "https://app.hubspot.com/login",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("userExists") is True or data.get("exists") is True or data.get("hasAccount") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://app.hubspot.com",
+                    )
+                if data.get("userExists") is False or data.get("exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ HubSpot Lookup API",
+        )
+
+
+@EmailCheckerRegistry.register("kaggle")
+class KaggleEmailChecker(BaseEmailChecker):
+    """Проверка наличия профиля дата-сайентиста на платформе Kaggle."""
+    @property
+    def name(self) -> str:
+        return "Kaggle"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://www.kaggle.com/api/v1/users/check-email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://www.kaggle.com",
+            "Referer": "https://www.kaggle.com/account/login",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("is_available") is False or data.get("exists") is True or data.get("taken") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.kaggle.com",
+                    )
+                if data.get("is_available") is True or data.get("exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Kaggle Check Email API",
+        )
+
+
+@EmailCheckerRegistry.register("gitkraken")
+class GitKrakenEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи разработчика в сервисе GitKraken."""
+    @property
+    def name(self) -> str:
+        return "GitKraken"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://api.gitkraken.com/users/lookup"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://app.gitkraken.com",
+            "Referer": "https://app.gitkraken.com/login",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("exists") is True or data.get("user_exists") is True or data.get("has_account") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.gitkraken.com",
+                    )
+                if data.get("exists") is False or data.get("user_exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ GitKraken Lookup API",
+        )
+
+
+
+@EmailCheckerRegistry.register("wise")
+class WiseEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи в международной финансовой платформе Wise."""
+    @property
+    def name(self) -> str:
+        return "Wise"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://wise.com/gateway/v1/users/lookup"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://wise.com",
+            "Referer": "https://wise.com/login",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("exists") is True or data.get("user_exists") is True or data.get("hasAccount") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://wise.com",
+                    )
+                if data.get("exists") is False or data.get("user_exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Wise Users Lookup API",
+        )
+
+
+@EmailCheckerRegistry.register("bitly")
+class BitlyEmailChecker(BaseEmailChecker):
+    """Проверка наличия профиля или учетной записи на платформе Bitly."""
+    @property
+    def name(self) -> str:
+        return "Bitly"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://bitly.com/api-v4/user/lookup"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://bitly.com",
+            "Referer": "https://bitly.com/a/sign_in",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("exists") is True or data.get("user_exists") is True or data.get("is_registered") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://bitly.com",
+                    )
+                if data.get("exists") is False or data.get("user_exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Bitly User Lookup API",
+        )
+
+
+@EmailCheckerRegistry.register("coursera")
+class CourseraEmailChecker(BaseEmailChecker):
+    """Проверка регистрации пользователя в образовательной платформе Coursera."""
+    @property
+    def name(self) -> str:
+        return "Coursera"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://www.coursera.org/api/userLookup.v1"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://www.coursera.org",
+            "Referer": "https://www.coursera.org/?authMode=login",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                elements = data.get("elements", [])
+                elem_exists = any(
+                    e.get("exists") is True or e.get("userExists") is True
+                    for e in elements if isinstance(e, dict)
+                )
+                if data.get("exists") is True or data.get("userExists") is True or elem_exists:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.coursera.org",
+                    )
+                if data.get("exists") is False or data.get("userExists") is False or (elements and not elem_exists):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Coursera User Lookup API",
+        )
+
+
+
+@EmailCheckerRegistry.register("substack")
+class SubstackEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи на издательской платформе Substack."""
+    @property
+    def name(self) -> str:
+        return "Substack"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://substack.com/api/v1/reader/email_lookup"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://substack.com",
+            "Referer": "https://substack.com/sign-in",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("exists") is True or data.get("user_exists") is True or data.get("has_account") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://substack.com",
+                    )
+                if data.get("exists") is False or data.get("user_exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Substack Reader Email Lookup API",
+        )
+
+
+@EmailCheckerRegistry.register("letterboxd")
+class LetterboxdEmailChecker(BaseEmailChecker):
+    """Проверка наличия профиля киносообщества Letterboxd по email."""
+    @property
+    def name(self) -> str:
+        return "Letterboxd"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://letterboxd.com/user/check-email/"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Origin": "https://letterboxd.com",
+            "Referer": "https://letterboxd.com/create-account/",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, content=urlencode(payload), headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                result_val = str(data.get("result", "")).lower()
+                if result_val == "taken" or data.get("taken") is True or data.get("exists") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://letterboxd.com",
+                    )
+                if result_val == "available" or data.get("taken") is False or data.get("exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Letterboxd Check Email API",
+        )
+
+
+@EmailCheckerRegistry.register("heroku")
+class HerokuEmailChecker(BaseEmailChecker):
+    """Проверка регистрации учетной записи в облачной платформе Heroku."""
+    @property
+    def name(self) -> str:
+        return "Heroku"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://signup.heroku.com/api/v1/email-check"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://signup.heroku.com",
+            "Referer": "https://signup.heroku.com/",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("taken") is True or data.get("exists") is True or "already" in str(data).lower():
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://heroku.com",
+                    )
+                if data.get("taken") is False or data.get("exists") is False or data.get("available") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Heroku Email Check API",
+        )
+
+
+
+@EmailCheckerRegistry.register("twilio")
+class TwilioEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи в облачной коммуникационной платформе Twilio."""
+    @property
+    def name(self) -> str:
+        return "Twilio"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://www.twilio.com/login/email_lookup"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://www.twilio.com",
+            "Referer": "https://www.twilio.com/login",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("exists") is True or data.get("user_exists") is True or data.get("hasAccount") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.twilio.com",
+                    )
+                if data.get("exists") is False or data.get("user_exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Twilio Email Lookup API",
+        )
+
+
+@EmailCheckerRegistry.register("kraken")
+class KrakenEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи на криптовалютной бирже Kraken."""
+    @property
+    def name(self) -> str:
+        return "Kraken"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://www.kraken.com/api/internal/users/lookup"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://www.kraken.com",
+            "Referer": "https://www.kraken.com/sign-in",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                res = data.get("result", {}) if isinstance(data.get("result"), dict) else data
+                if res.get("exists") is True or res.get("user_exists") is True or res.get("registered") is True or data.get("exists") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.kraken.com",
+                    )
+                if res.get("exists") is False or res.get("user_exists") is False or res.get("registered") is False or data.get("exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Kraken User Lookup API",
+        )
+
+
+@EmailCheckerRegistry.register("dribbble")
+class DribbbleEmailChecker(BaseEmailChecker):
+    """Проверка наличия профиля дизайнера на платформе Dribbble."""
+    @property
+    def name(self) -> str:
+        return "Dribbble"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://dribbble.com/users/check_email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Origin": "https://dribbble.com",
+            "Referer": "https://dribbble.com/signup/new",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, content=urlencode(payload), headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("taken") is True or data.get("exists") is True or data.get("in_use") is True or "taken" in str(data).lower():
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://dribbble.com",
+                    )
+                if data.get("taken") is False or data.get("exists") is False or data.get("available") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Dribbble Check Email API",
+        )
+
+
+
+@EmailCheckerRegistry.register("onepassword")
+class OnePasswordEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи в менеджере паролей 1Password."""
+    @property
+    def name(self) -> str:
+        return "1Password"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://my.1password.com/api/v1/account/lookup"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://my.1password.com",
+            "Referer": "https://my.1password.com/signin",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("account_exists") is True or data.get("exists") is True or data.get("user_exists") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://my.1password.com",
+                    )
+                if data.get("account_exists") is False or data.get("exists") is False or data.get("user_exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ 1Password Account Lookup API",
+        )
+
+
+@EmailCheckerRegistry.register("producthunt")
+class ProductHuntEmailChecker(BaseEmailChecker):
+    """Проверка наличия профиля на платформе стартапов Product Hunt."""
+    @property
+    def name(self) -> str:
+        return "Product Hunt"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://www.producthunt.com/frontend/users/email_lookup"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://www.producthunt.com",
+            "Referer": "https://www.producthunt.com/login",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("exists") is True or data.get("user_exists") is True or data.get("taken") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.producthunt.com",
+                    )
+                if data.get("exists") is False or data.get("user_exists") is False or data.get("taken") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Product Hunt Email Lookup API",
+        )
+
+
+@EmailCheckerRegistry.register("pastebin")
+class PastebinEmailChecker(BaseEmailChecker):
+    """Проверка регистрации учетной записи в сервисе Pastebin."""
+    @property
+    def name(self) -> str:
+        return "Pastebin"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://pastebin.com/ajax/check_email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Origin": "https://pastebin.com",
+            "Referer": "https://pastebin.com/signup",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, content=urlencode(payload), headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                status_val = str(data.get("status", "")).lower()
+                if status_val == "taken" or data.get("taken") is True or data.get("exists") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://pastebin.com",
+                    )
+                if status_val == "available" or data.get("taken") is False or data.get("exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Pastebin Check Email API",
+        )
+
+
+
+@EmailCheckerRegistry.register("skillshare")
+class SkillshareEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи на образовательной платформе Skillshare."""
+    @property
+    def name(self) -> str:
+        return "Skillshare"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://www.skillshare.com/api/users/check-email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://www.skillshare.com",
+            "Referer": "https://www.skillshare.com/signup",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("exists") is True or data.get("is_available") is False or data.get("user_exists") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.skillshare.com",
+                    )
+                if data.get("exists") is False or data.get("is_available") is True or data.get("user_exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Skillshare Check Email API",
+        )
+
+
+@EmailCheckerRegistry.register("ifttt")
+class IftttEmailChecker(BaseEmailChecker):
+    """Проверка наличия профиля или учетной записи в сервисе автоматизации IFTTT."""
+    @property
+    def name(self) -> str:
+        return "IFTTT"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://ifttt.com/session/email_lookup"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://ifttt.com",
+            "Referer": "https://ifttt.com/login",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("exists") is True or data.get("user_exists") is True or data.get("has_account") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://ifttt.com",
+                    )
+                if data.get("exists") is False or data.get("user_exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ IFTTT Email Lookup API",
+        )
+
+
+@EmailCheckerRegistry.register("bybit")
+class BybitEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи на криптовалютной бирже Bybit."""
+    @property
+    def name(self) -> str:
+        return "Bybit"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://api2.bybit.com/user/public/check-account"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://www.bybit.com",
+            "Referer": "https://www.bybit.com/login",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"account": email, "type": 1}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                res = data.get("result", {}) if isinstance(data.get("result"), dict) else data
+                if res.get("hasRegistered") is True or res.get("exists") is True or data.get("registered") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.bybit.com",
+                    )
+                if res.get("hasRegistered") is False or res.get("exists") is False or data.get("registered") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Bybit Check Account API",
+        )
+
+
+
+@EmailCheckerRegistry.register("bitdefender")
+class BitdefenderEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи в экосистеме безопасности Bitdefender."""
+    @property
+    def name(self) -> str:
+        return "Bitdefender"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://central.bitdefender.com/api/v2/auth/check-email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://central.bitdefender.com",
+            "Referer": "https://central.bitdefender.com/",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("exists") is True or data.get("user_exists") is True or data.get("hasAccount") is True or data.get("registered") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://central.bitdefender.com",
+                    )
+                if data.get("exists") is False or data.get("user_exists") is False or data.get("registered") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Bitdefender Check Email API",
+        )
+
+
+@EmailCheckerRegistry.register("deviantart")
+class DeviantArtEmailChecker(BaseEmailChecker):
+    """Проверка наличия профиля художника в сообществе DeviantArt."""
+    @property
+    def name(self) -> str:
+        return "DeviantArt"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://www.deviantart.com/_napi/da-user-profile/api/check_email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Origin": "https://www.deviantart.com",
+            "Referer": "https://www.deviantart.com/join",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, content=urlencode(payload), headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("is_available") is False or data.get("taken") is True or data.get("exists") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.deviantart.com",
+                    )
+                if data.get("is_available") is True or data.get("taken") is False or data.get("exists") is False:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ DeviantArt Check Email API",
+        )
+
+
+@EmailCheckerRegistry.register("goodreads")
+class GoodreadsEmailChecker(BaseEmailChecker):
+    """Проверка наличия профиля читателя в книжной социальной сети Goodreads."""
+    @property
+    def name(self) -> str:
+        return "Goodreads"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://www.goodreads.com/user/check_email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Origin": "https://www.goodreads.com",
+            "Referer": "https://www.goodreads.com/user/sign_up",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, content=urlencode(payload), headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if data.get("taken") is True or data.get("exists") is True or data.get("in_use") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.goodreads.com",
+                    )
+                if data.get("taken") is False or data.get("exists") is False or data.get("available") is True:
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Goodreads Check Email API",
+        )
+
+
+@EmailCheckerRegistry.register("udemy")
+class UdemyEmailChecker(BaseEmailChecker):
+    """Проверка наличия профиля студента или преподавателя на платформе онлайн-обучения Udemy."""
+    @property
+    def name(self) -> str:
+        return "Udemy"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://www.udemy.com/api-2.0/users/validate-field/"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/plain, */*",
+            "Origin": "https://www.udemy.com",
+            "Referer": "https://www.udemy.com/join/signup-popup/",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"field": "email", "value": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if (
+                    data.get("is_available") is False
+                    or data.get("taken") is True
+                    or data.get("exists") is True
+                    or "already exists" in str(data).lower()
+                    or "already in use" in str(data).lower()
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.udemy.com",
+                    )
+                if (
+                    data.get("is_available") is True
+                    or data.get("taken") is False
+                    or data.get("exists") is False
+                    or data.get("status") == "ok"
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Udemy Validate Field API",
+        )
+
+
+@EmailCheckerRegistry.register("miro")
+class MiroEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи на платформе визуального сотрудничества Miro."""
+    @property
+    def name(self) -> str:
+        return "Miro"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://miro.com/api/v1/auth/email/check"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://miro.com",
+            "Referer": "https://miro.com/signup/",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if (
+                    data.get("exists") is True
+                    or data.get("registered") is True
+                    or data.get("hasAccount") is True
+                    or data.get("userExists") is True
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://miro.com",
+                    )
+                if (
+                    data.get("exists") is False
+                    or data.get("registered") is False
+                    or data.get("hasAccount") is False
+                    or data.get("userExists") is False
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Miro Auth Email Check API",
+        )
+
+
+@EmailCheckerRegistry.register("airtable")
+class AirtableEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи в облачной базе данных Airtable."""
+    @property
+    def name(self) -> str:
+        return "Airtable"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://airtable.com/v0.3/user/doesUserExistWithEmail"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://airtable.com",
+            "Referer": "https://airtable.com/signup",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if (
+                    data.get("doesUserExist") is True
+                    or data.get("exists") is True
+                    or data.get("userExists") is True
+                    or data.get("hasAccount") is True
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://airtable.com",
+                    )
+                if (
+                    data.get("doesUserExist") is False
+                    or data.get("exists") is False
+                    or data.get("userExists") is False
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Airtable User Exist API",
+        )
+
+
+@EmailCheckerRegistry.register("digitalocean")
+class DigitalOceanEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи в облачной платформе DigitalOcean."""
+    @property
+    def name(self) -> str:
+        return "DigitalOcean"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://cloud.digitalocean.com/api/v1/registration/check_email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://cloud.digitalocean.com",
+            "Referer": "https://cloud.digitalocean.com/registrations/new",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if (
+                    data.get("is_available") is False
+                    or data.get("exists") is True
+                    or data.get("taken") is True
+                    or "already exists" in str(data).lower()
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://cloud.digitalocean.com",
+                    )
+                if (
+                    data.get("is_available") is True
+                    or data.get("exists") is False
+                    or data.get("taken") is False
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ DigitalOcean Registration API",
+        )
+
+
+@EmailCheckerRegistry.register("clickup")
+class ClickUpEmailChecker(BaseEmailChecker):
+    """Проверка наличия профиля пользователя в системе управления проектами ClickUp."""
+    @property
+    def name(self) -> str:
+        return "ClickUp"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://api.clickup.com/v2/user/check"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://app.clickup.com",
+            "Referer": "https://app.clickup.com/signup",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if (
+                    data.get("exists") is True
+                    or data.get("registered") is True
+                    or data.get("user_exists") is True
+                    or data.get("hasAccount") is True
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://app.clickup.com",
+                    )
+                if (
+                    data.get("exists") is False
+                    or data.get("registered") is False
+                    or data.get("user_exists") is False
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ ClickUp User Check API",
+        )
+
+
+@EmailCheckerRegistry.register("leetcode")
+class LeetCodeEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи на платформе для разработчиков LeetCode."""
+    @property
+    def name(self) -> str:
+        return "LeetCode"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://leetcode.com/accounts/email/check/"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://leetcode.com",
+            "Referer": "https://leetcode.com/accounts/signup/",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if (
+                    data.get("taken") is True
+                    or data.get("exists") is True
+                    or data.get("is_available") is False
+                    or "already exists" in str(data).lower()
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://leetcode.com",
+                    )
+                if (
+                    data.get("taken") is False
+                    or data.get("exists") is False
+                    or data.get("is_available") is True
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ LeetCode Email Check API",
+        )
+
+
+@EmailCheckerRegistry.register("webflow")
+class WebflowEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи на платформе веб-дизайна Webflow."""
+    @property
+    def name(self) -> str:
+        return "Webflow"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://webflow.com/api/user/check-email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://webflow.com",
+            "Referer": "https://webflow.com/dashboard/signup",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if (
+                    data.get("isAvailable") is False
+                    or data.get("exists") is True
+                    or data.get("taken") is True
+                    or "already exists" in str(data).lower()
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://webflow.com",
+                    )
+                if (
+                    data.get("isAvailable") is True
+                    or data.get("exists") is False
+                    or data.get("taken") is False
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Webflow Check Email API",
+        )
+
+
+@EmailCheckerRegistry.register("gog")
+class GogEmailChecker(BaseEmailChecker):
+    """Проверка наличия профиля игрока на платформе цифровой дистрибуции GOG."""
+    @property
+    def name(self) -> str:
+        return "GOG"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://login.gog.com/user/check/email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://www.gog.com",
+            "Referer": "https://www.gog.com/",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if (
+                    data.get("taken") is True
+                    or data.get("exists") is True
+                    or data.get("hasAccount") is True
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.gog.com",
+                    )
+                if (
+                    data.get("taken") is False
+                    or data.get("exists") is False
+                    or data.get("hasAccount") is False
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ GOG User Check Email API",
+        )
+
+
+@EmailCheckerRegistry.register("loom")
+class LoomEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи на платформе корпоративных видеосообщений Loom."""
+    @property
+    def name(self) -> str:
+        return "Loom"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://www.loom.com/api/campaign/check-email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://www.loom.com",
+            "Referer": "https://www.loom.com/signup",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if (
+                    data.get("hasAccount") is True
+                    or data.get("exists") is True
+                    or data.get("registered") is True
+                    or data.get("userExists") is True
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.loom.com",
+                    )
+                if (
+                    data.get("hasAccount") is False
+                    or data.get("exists") is False
+                    or data.get("registered") is False
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Loom Check Email API",
+        )
+
+
+@EmailCheckerRegistry.register("fiverr")
+class FiverrEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи на платформе фриланс-услуг Fiverr."""
+    @property
+    def name(self) -> str:
+        return "Fiverr"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://www.fiverr.com/users/check_email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://www.fiverr.com",
+            "Referer": "https://www.fiverr.com/join",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if (
+                    data.get("taken") is True
+                    or data.get("exists") is True
+                    or data.get("is_available") is False
+                    or "already in use" in str(data).lower()
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.fiverr.com",
+                    )
+                if (
+                    data.get("taken") is False
+                    or data.get("exists") is False
+                    or data.get("is_available") is True
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Fiverr Check Email API",
+        )
+
+
+@EmailCheckerRegistry.register("kickstarter")
+class KickstarterEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи на краудфандинговой платформе Kickstarter."""
+    @property
+    def name(self) -> str:
+        return "Kickstarter"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://www.kickstarter.com/users/check_email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://www.kickstarter.com",
+            "Referer": "https://www.kickstarter.com/signup",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if (
+                    data.get("taken") is True
+                    or data.get("exists") is True
+                    or data.get("in_use") is True
+                    or "already exists" in str(data).lower()
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.kickstarter.com",
+                    )
+                if (
+                    data.get("taken") is False
+                    or data.get("exists") is False
+                    or data.get("in_use") is False
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Kickstarter Check Email API",
+        )
+
+
+@EmailCheckerRegistry.register("monday")
+class MondayEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи на платформе управления проектами Monday.com."""
+    @property
+    def name(self) -> str:
+        return "Monday.com"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://auth.monday.com/users/check_email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://auth.monday.com",
+            "Referer": "https://auth.monday.com/users/sign_up_new",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if (
+                    data.get("exists") is True
+                    or data.get("user_exists") is True
+                    or data.get("registered") is True
+                    or data.get("hasAccount") is True
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://monday.com",
+                    )
+                if (
+                    data.get("exists") is False
+                    or data.get("user_exists") is False
+                    or data.get("registered") is False
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Monday.com Check Email API",
+        )
+
+
+@EmailCheckerRegistry.register("zendesk")
+class ZendeskEmailChecker(BaseEmailChecker):
+    """Проверка наличия учетной записи в системе поддержки клиентов Zendesk."""
+    @property
+    def name(self) -> str:
+        return "Zendesk"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://login.zendesk.com/api/v2/users/check_email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://login.zendesk.com",
+            "Referer": "https://login.zendesk.com/",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if (
+                    data.get("exists") is True
+                    or data.get("user_exists") is True
+                    or data.get("registered") is True
+                    or data.get("hasAccount") is True
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://login.zendesk.com",
+                    )
+                if (
+                    data.get("exists") is False
+                    or data.get("user_exists") is False
+                    or data.get("registered") is False
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Zendesk Check Email API",
+        )
+
+
+@EmailCheckerRegistry.register("khanacademy")
+class KhanAcademyEmailChecker(BaseEmailChecker):
+    """Проверка наличия профиля учащегося или преподавателя на платформе Khan Academy."""
+    @property
+    def name(self) -> str:
+        return "Khan Academy"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://www.khanacademy.org/api/internal/user/check_email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://www.khanacademy.org",
+            "Referer": "https://www.khanacademy.org/signup",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, json=payload, headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if (
+                    data.get("is_available") is False
+                    or data.get("taken") is True
+                    or data.get("exists") is True
+                    or "already exists" in str(data).lower()
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://www.khanacademy.org",
+                    )
+                if (
+                    data.get("is_available") is True
+                    or data.get("taken") is False
+                    or data.get("exists") is False
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Khan Academy Check Email API",
+        )
+
+
+@EmailCheckerRegistry.register("lichess")
+class LichessEmailChecker(BaseEmailChecker):
+    """Проверка наличия профиля игрока на шахматной платформе Lichess."""
+    @property
+    def name(self) -> str:
+        return "Lichess"
+
+    async def probe_email(
+        self,
+        email: str,
+        target: TargetProfile,
+        client: httpx.AsyncClient,
+        start_time: float,
+    ) -> CheckResult:
+        check_url = "https://lichess.org/signup/check/email"
+        headers = self.default_headers.copy()
+        headers.update({
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Origin": "https://lichess.org",
+            "Referer": "https://lichess.org/signup",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+        payload = {"email": email}
+        resp = await client.post(check_url, content=urlencode(payload), headers=headers)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                if (
+                    data.get("taken") is True
+                    or data.get("exists") is True
+                    or data.get("available") is False
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                        profile_url="https://lichess.org",
+                    )
+                if (
+                    data.get("taken") is False
+                    or data.get("exists") is False
+                    or data.get("available") is True
+                ):
+                    return self.create_result(
+                        target=target,
+                        status=DetectionStatus.NOT_FOUND,
+                        response_time_ms=elapsed_ms,
+                        http_status_code=200,
+                    )
+            except Exception:
+                pass
+
+        if resp.status_code in (403, 429):
+            return self.create_result(
+                target=target,
+                status=DetectionStatus.BLOCKED if resp.status_code == 403 else DetectionStatus.RATE_LIMITED,
+                response_time_ms=elapsed_ms,
+                http_status_code=resp.status_code,
+            )
+
+        return self.create_result(
+            target=target,
+            status=DetectionStatus.ERROR,
+            response_time_ms=elapsed_ms,
+            http_status_code=resp.status_code,
+            error_message="Некорректный ответ Lichess Check Email API",
+        )
+
+
 class EmailReconExecutor:
     """Оркестратор параллельной проверки eMail через Google и сервис-чекеры."""
 
